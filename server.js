@@ -10,14 +10,15 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS - allow frontend
+// CORS - Netlify ko ijazat
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true
 }));
+
 app.use(express.json());
 
-// Routes
+// Routes - /api lazmi hai
 app.use('/api', scrapeRoutes);
 app.use('/api', leadsRoutes);
 
@@ -28,7 +29,7 @@ app.get('/', (req, res) => {
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI, {
-  serverSelectionTimeoutMS: 5000,
+  serverSelectionTimeoutMS: 5000
 })
 .then(() => console.log('✅ MongoDB connected'))
 .catch(err => {
@@ -37,5 +38,5 @@ mongoose.connect(process.env.MONGODB_URI, {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 LeadStriker backend on port ${PORT}`);
+  console.log(`✅ LeadStriker backend on port ${PORT}`);
 });
