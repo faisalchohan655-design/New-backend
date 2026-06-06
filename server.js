@@ -10,15 +10,17 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS - Netlify ko ijazat
+// CORS - Netlify کو اجازت + سب allow
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: ["https://gentle-sunshine-270772.netlify.app", "http://localhost:5173"],
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"],
   credentials: true
 }));
 
 app.use(express.json());
 
-// Routes - /api lazmi hai
+// Routes
 app.use('/api', scrapeRoutes);
 app.use('/api', leadsRoutes);
 
@@ -28,7 +30,7 @@ app.get('/', (req, res) => {
 });
 
 // MongoDB connection
-mongoose.connect(process.env.MONGODB_URI, {
+mongoose.connect(process.env.MONGO_URL, {
   serverSelectionTimeoutMS: 5000
 })
 .then(() => console.log('✅ MongoDB connected'))
