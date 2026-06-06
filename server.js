@@ -8,9 +8,9 @@ import leadsRoutes from './routes/leads.js';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 
-// CORS - Netlify کو اجازت + سب allow
+// CORS - Netlify + Localhost allow
 app.use(cors({
   origin: ["https://gentle-sunshine-270772.netlify.app", "http://localhost:5173"],
   methods: ["GET", "POST", "OPTIONS"],
@@ -29,16 +29,17 @@ app.get('/', (req, res) => {
   res.json({ message: 'LeadStriker API is running', status: 'ok' });
 });
 
-// MongoDB connection
+// MongoDB connection - Error handle کر کے crash نہیں ہو گا
 mongoose.connect(process.env.MONGO_URL, {
   serverSelectionTimeoutMS: 5000
 })
 .then(() => console.log('✅ MongoDB connected'))
 .catch(err => {
   console.error('❌ MongoDB error:', err.message);
-  process.exit(1);
+  console.log('⚠️ Server will run without DB. Fix MONGO_URL in Railway Variables');
 });
 
+// Server start - DB سے پہلے چلے گا
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ LeadStriker backend on port ${PORT}`);
 });
