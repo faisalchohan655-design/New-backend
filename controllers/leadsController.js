@@ -10,7 +10,6 @@ export const getAllLeads = async (req, res) => {
   }
 };
 
-// ✅ New: Delete a lead by ID
 export const deleteLead = async (req, res) => {
   try {
     const { id } = req.params;
