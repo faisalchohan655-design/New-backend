@@ -1,5 +1,6 @@
 import express from 'express';
 import axios from 'axios';
+import { saveLeads } from '../controllers/leadsController.js';
 
 const router = express.Router();
 
@@ -7,12 +8,12 @@ router.post('/', async (req, res) => {
   try {
     const { keyword, city, limit = 20, filters } = req.body;
     console.log('Scrape request:', { keyword, city, limit });
-    
+
     const SERPAPI_KEY = process.env.SERPAPI_KEY;
-    
+
     if (!SERPAPI_KEY) {
-      return res.status(500).json({ 
-        error: 'SERPAPI_KEY missing. Railway > Variables میں ڈالو' 
+      return res.status(500).json({
+        error: 'SERPAPI_KEY missing. Railway > Variables میں لگاؤ'
       });
     }
 
@@ -26,22 +27,28 @@ router.post('/', async (req, res) => {
     });
 
     const results = response.data.local_results || [];
-    
+
     const leads = results.map(place => ({
       name: place.title || '',
       address: place.address || '',
       phone: place.phone || '',
       website: place.website || '',
       rating: place.rating || 0,
-      reviews: place.reviews || 0
+      placeId: place.place_id || null,
+      city: city || '',
+      interest: keyword || '',
+      source: 'Google Maps',
+      snippet: place.snippet || ''
     }));
 
-    res.json({ 
-      success: true, 
+    await saveLeads(leads); // MongoDB میں save
+
+    res.json({
+      success: true,
       total: leads.length,
-      leads 
+      leads
     });
-    
+
   } catch (error) {
     console.error('Scrape error:', error.message);
     res.status(500).json({ error: error.message });
