@@ -7,7 +7,12 @@ const leadSchema = new mongoose.Schema({
   website: { type: String, default: '' },
   address: { type: String, default: '' },
   rating: { type: Number, default: 0 },
-  placeId: { type: String, unique: true, required: true },
+  placeId: { type: String, default: null },
+  source: { type: String, default: 'Google Maps' },
+  city: { type: String, default: '' },
+  interest: { type: String, default: '' },
+  postUrl: { type: String, default: '' },
+  snippet: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });
 
