@@ -2,30 +2,45 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 
-import scrapeRoutes from './routes/scrape.js';      // Google Maps
-import leadsRoutes from './routes/leads.js';        // Leads
-import facebookRoutes from './routes/facebook.js';  // Facebook
+import scrapeRoutes from './routes/scrape.js';      // Google Maps Scraper
+import leadsRoutes from './routes/leads.js';        // Leads CRUD
+import facebookRoutes from './routes/facebook.js';  // Facebook Scraper
 import outreachRoutes from './routes/outreach.js';  // Email Extractor
 
 const app = express();
+
 const PORT = process.env.PORT || 8080;
 
-// Middleware
+// CORS - Netlify اور localhost دونوں Allow
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'https://profound-lamington-3082f4.netlify.app',
+  'http://localhost:5173',
+  'http://localhost:3000'
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
+
 app.use(express.json());
 
 // MongoDB Connection
-const MONGODB_URI = process.env.MONGODB_URI;
+const MONGO_URI = process.env.MONGO_URI;
 
-if (!MONGODB_URI) {
-  console.error('❌ MONGODB_URI variable missing in Railway');
+if (!MONGO_URI) {
+  console.error('❌ MONGO_URI variable missing in Railway');
   process.exit(1);
 }
 
-mongoose.connect(MONGODB_URI, {
+mongoose.connect(MONGO_URI, {
   serverSelectionTimeoutMS: 5000
 })
 .then(() => console.log('✅ MongoDB Connected Successfully'))
@@ -35,10 +50,10 @@ mongoose.connect(MONGODB_URI, {
 });
 
 // Routes
-app.use('/api/scrape', scrapeRoutes);      // Google Maps Scraper
-app.use('/api/leads', leadsRoutes);        // Leads CRUD
-app.use('/api/facebook', facebookRoutes); // Facebook Scraper  
-app.use('/api/emails', outreachRoutes);   // Email Extractor Tool
+app.use('/api/scrape', scrapeRoutes);        // Google Maps Scraper
+app.use('/api/leads', leadsRoutes);          // Leads CRUD
+app.use('/api/facebook', facebookRoutes);    // Facebook Scraper
+app.use('/api/emails', outreachRoutes);      // Email Extractor Tool
 
 // Health check route
 app.get('/api/health', (req, res) => {
@@ -49,7 +64,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Root route
 app.get('/', (req, res) => {
   res.json({
     message: 'LeadStriker API is running',
