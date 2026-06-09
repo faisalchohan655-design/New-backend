@@ -4,42 +4,35 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import scrapeRoutes from './routes/scrape.js';
 import leadsRoutes from './routes/leads.js';
+import facebookRoutes from './routes/facebook.js';
+import instagramRoutes from './routes/instagram.js';
+import linkedinRoutes from './routes/linkedin.js';
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
-// CORS - Netlify + Localhost allow
 app.use(cors({
-  origin: ["https://gentle-sunshine-270772.netlify.app", "http://localhost:5173"],
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type"],
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true
 }));
-
 app.use(express.json());
 
-// Routes
 app.use('/api', scrapeRoutes);
 app.use('/api', leadsRoutes);
+app.use('/api', facebookRoutes);
+app.use('/api', instagramRoutes);
+app.use('/api', linkedinRoutes);
 
-// Health check
 app.get('/', (req, res) => {
   res.json({ message: 'LeadStriker API is running', status: 'ok' });
 });
 
-// MongoDB connection - Error handle کر کے crash نہیں ہو گا
-mongoose.connect(process.env.MONGO_URL, {
-  serverSelectionTimeoutMS: 5000
-})
-.then(() => console.log('✅ MongoDB connected'))
-.catch(err => {
-  console.error('❌ MongoDB error:', err.message);
-  console.log('⚠️ Server will run without DB. Fix MONGO_URL in Railway Variables');
-});
+mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => { console.error('❌ MongoDB error:', err.message); process.exit(1); });
 
-// Server start - DB سے پہلے چلے گا
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ LeadStriker backend on port ${PORT}`);
+  console.log(`🚀 LeadStriker backend on port ${PORT}`);
 });
