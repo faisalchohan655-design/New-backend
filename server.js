@@ -18,19 +18,24 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Routes - Sirf 3 routes hain ab, Instagram/LinkedIn hata diye
-app.use('/api', scrapeRoutes);      // Google Maps
-app.use('/api', leadsRoutes);       // GET & DELETE leads  
-app.use('/api', facebookRoutes);    // Facebook buyer scraper
+// Routes - Sirf 3 routes
+app.use('/api', scrapeRoutes);        // Google Maps
+app.use('/api', leadsRoutes);         // GET & DELETE leads  
+app.use('/api', facebookRoutes);      // Facebook buyer scraper
 
-// Health check
+// Health check route - Yahi missing tha
+app.get('/api/health', (req, res) => {
+  res.json({status: "ok", db: "connected", time: new Date()})
+});
+
+// Root route
 app.get('/', (req, res) => {
   res.json({ message: 'LeadStriker API is running', status: 'ok' });
 });
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI, { 
-  serverSelectionTimeoutMS: 5000 
+mongoose.connect(process.env.MONGODB_URI, {
+  serverSelectionTimeoutMS: 5000
 })
 .then(() => console.log('✅ MongoDB connected'))
 .catch(err => {
