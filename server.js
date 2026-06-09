@@ -5,8 +5,6 @@ import dotenv from 'dotenv';
 import scrapeRoutes from './routes/scrape.js';
 import leadsRoutes from './routes/leads.js';
 import facebookRoutes from './routes/facebook.js';
-import instagramRoutes from './routes/instagram.js';
-import linkedinRoutes from './routes/linkedin.js';
 
 dotenv.config();
 
@@ -19,19 +17,22 @@ app.use(cors({
 }));
 app.use(express.json());
 
-app.use('/api', scrapeRoutes);
-app.use('/api', leadsRoutes);
-app.use('/api', facebookRoutes);
-app.use('/api', instagramRoutes);
-app.use('/api', linkedinRoutes);
+// Routes
+app.use('/api', scrapeRoutes);      // Google Maps
+app.use('/api', leadsRoutes);       // GET & DELETE leads
+app.use('/api', facebookRoutes);    // Facebook scraper
 
 app.get('/', (req, res) => {
   res.json({ message: 'LeadStriker API is running', status: 'ok' });
 });
 
+// MongoDB connection
 mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
   .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => { console.error('❌ MongoDB error:', err.message); process.exit(1); });
+  .catch(err => {
+    console.error('❌ MongoDB error:', err.message);
+    process.exit(1);
+  });
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 LeadStriker backend on port ${PORT}`);
