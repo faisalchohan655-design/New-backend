@@ -15,20 +15,14 @@ export const startScraping = async (req, res) => {
 
     // Apply quality filters
     let filteredLeads = scrapedLeads;
-    if (filters?.requireEmail) {
-      filteredLeads = filteredLeads.filter(l => l.email && l.email.trim() !== '');
-    }
-    if (filters?.requirePhone) {
-      filteredLeads = filteredLeads.filter(l => l.phone && l.phone.trim() !== '');
-    }
-    if (filters?.requireWebsite) {
-      filteredLeads = filteredLeads.filter(l => l.website && l.website.trim() !== '');
-    }
+    if (filters?.requireEmail) filteredLeads = filteredLeads.filter(l => l.email && l.email.trim() !== '');
+    if (filters?.requirePhone) filteredLeads = filteredLeads.filter(l => l.phone && l.phone.trim() !== '');
+    if (filters?.requireWebsite) filteredLeads = filteredLeads.filter(l => l.website && l.website.trim() !== '');
 
     const savedLeads = [];
     for (const lead of filteredLeads) {
       const updated = await Lead.findOneAndUpdate(
-        { placeId: lead.placeId },      // ✅ Use placeId, not _id or lead_id
+        { placeId: lead.placeId },
         { $set: lead },
         { upsert: true, new: true }
       );
