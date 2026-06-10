@@ -2,35 +2,27 @@ import axios from 'axios';
 
 export const scrapeGoogleMaps = async (keyword, city, count, apiKey) => {
   const query = `${keyword} ${city}`;
-  let allResults = [];
+  let all = [];
   let start = 0;
   const limit = Math.min(count, 50);
-
-  while (allResults.length < limit) {
-    const response = await axios.get('https://serpapi.com/search', {
-      params: {
-        engine: 'google_maps',
-        q: query,
-        type: 'search',
-        api_key: apiKey,
-        start: start
-      }
+  while (all.length < limit) {
+    const res = await axios.get('https://serpapi.com/search', {
+      params: { engine: 'google_maps', q: query, type: 'search', api_key: apiKey, start }
     });
-    const localResults = response.data?.local_results || [];
-    if (localResults.length === 0) break;
-
-    const mapped = localResults.map(place => ({
-      name: place.title || '',
-      phone: place.phone || '',
+    const local = res.data?.local_results || [];
+    if (!local.length) break;
+    const mapped = local.map(p => ({
+      name: p.title || '',
+      phone: p.phone || '',
       email: '',
-      website: place.website || '',
-      address: place.address || '',
-      rating: place.rating || 0,
-      placeId: place.place_id || `${place.title}-${place.address}`
+      website: p.website || '',
+      address: p.address || '',
+      rating: p.rating || 0,
+      placeId: p.place_id || `${p.title}-${p.address}`
     }));
-    allResults.push(...mapped);
+    all.push(...mapped);
     start += 20;
-    if (localResults.length < 20) break;
+    if (local.length < 20) break;
   }
-  return allResults.slice(0, limit);
+  return all.slice(0, limit);
 };
