@@ -27,6 +27,7 @@ app.get('/', (req, res) => {
   res.json({ message: 'LeadStriker API is running', status: 'ok' });
 });
 
+// ✅ Use MONGODB_URI (not MONGO_DB_URL)
 mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
   .then(() => console.log('✅ MongoDB connected'))
   .catch(err => {
