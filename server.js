@@ -28,12 +28,14 @@ app.get('/', (req, res) => {
   res.json({ message: 'LeadStriker API is running', status: 'ok' });
 });
 
-mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => {
-    console.error('❌ MongoDB error:', err.message);
-    process.exit(1);
-  });
+mongoose.connect(process.env.MONGODB_URI, {
+  serverSelectionTimeoutMS: 5000
+})
+.then(() => console.log('✅ MongoDB connected'))
+.catch(err => {
+  console.error('❌ MongoDB error:', err.message);
+  process.exit(1);
+});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 LeadStriker backend on port ${PORT}`);
