@@ -35,8 +35,8 @@ async function scrapePage(url) {
     const phoneRegex = /(?:\+?92|0)?[0-9]{10,14}/g;
     const phones = [...new Set(text.match(phoneRegex) || [])];
     return { emails, phones };
-  } catch (err) {
-    console.error(`Scrape error ${url}:`, err.message);
+  } catch (error) {
+    console.error(`Scrape error for ${url}:`, error.message);
     return { emails: [], phones: [] };
   }
 }
@@ -65,7 +65,9 @@ export async function extractEmailsFromUrl(startUrl, deep = false, maxPages = 10
         $('a[href^="/"]').each((_, el) => {
           let href = $(el).attr('href');
           if (href && !href.startsWith('http')) href = new URL(href, current).href;
-          if (href && !visited.has(href) && href.includes(new URL(startUrl).hostname)) queue.push(href);
+          if (href && !visited.has(href) && href.includes(new URL(startUrl).hostname)) {
+            queue.push(href);
+          }
         });
       } catch(e) {}
     }
