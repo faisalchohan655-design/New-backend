@@ -5,37 +5,28 @@ export const startScraping = async (req, res) => {
   try {
     const { keyword, city, count, filters } = req.body;
     if (!keyword || !city || !count) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: 'Missing fields' });
     }
-
     const apiKey = process.env.SERPAPI_KEY;
-    if (!apiKey) return res.status(500).json({ error: 'SerpAPI key missing' });
+    if (!apiKey) return res.status(500).json({ error: 'No SerpAPI key' });
 
-    const scrapedLeads = await scrapeGoogleMaps(keyword, city, parseInt(count), apiKey);
+    const scraped = await scrapeGoogleMaps(keyword, city, parseInt(count), apiKey);
+    let filtered = scraped;
+    if (filters?.requireEmail) filtered = filtered.filter(l => l.email);
+    if (filters?.requirePhone) filtered = filtered.filter(l => l.phone);
+    if (filters?.requireWebsite) filtered = filtered.filter(l => l.website);
 
-    // Apply quality filters
-    let filteredLeads = scrapedLeads;
-    if (filters?.requireEmail) filteredLeads = filteredLeads.filter(l => l.email && l.email.trim() !== '');
-    if (filters?.requirePhone) filteredLeads = filteredLeads.filter(l => l.phone && l.phone.trim() !== '');
-    if (filters?.requireWebsite) filteredLeads = filteredLeads.filter(l => l.website && l.website.trim() !== '');
-
-    const savedLeads = [];
-    for (const lead of filteredLeads) {
+    const saved = [];
+    for (const lead of filtered) {
       const updated = await Lead.findOneAndUpdate(
         { placeId: lead.placeId },
         { $set: lead },
         { upsert: true, new: true }
       );
-      savedLeads.push(updated);
+      saved.push(updated);
     }
-
-    res.status(200).json({
-      message: `✅ Scraped ${scrapedLeads.length}, saved ${savedLeads.length} after filters`,
-      leads: savedLeads,
-      filteredOut: scrapedLeads.length - savedLeads.length
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
+    res.json({ message: `Saved ${saved.length} leads`, leads: saved });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
