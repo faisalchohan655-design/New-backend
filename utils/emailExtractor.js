@@ -1,5 +1,14 @@
+// Use dynamic import for cheerio to avoid top‑level module resolution errors
+let cheerio;
+const loadCheerio = async () => {
+  if (!cheerio) {
+    const module = await import('cheerio');
+    cheerio = module.default || module;
+  }
+  return cheerio;
+};
+
 import axios from 'axios';
-import cheerio from 'cheerio';
 import dns from 'dns';
 import { promisify } from 'util';
 
@@ -21,22 +30,20 @@ export async function verifyEmail(email) {
   try {
     const mx = await resolveMx(domain);
     return mx && mx.length > 0;
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
 
 async function scrapePage(url) {
   try {
     const res = await axios.get(url, { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } });
-    const $ = cheerio.load(res.data);
+    const $ = await (await loadCheerio()).load(res.data);
     const text = $('body').text();
     const emails = extractEmails(text);
     const phoneRegex = /(?:\+?92|0)?[0-9]{10,14}/g;
     const phones = [...new Set(text.match(phoneRegex) || [])];
     return { emails, phones };
   } catch (error) {
-    console.error(`Scrape error for ${url}:`, error.message);
+    console.error(`Scrape error ${url}:`, error.message);
     return { emails: [], phones: [] };
   }
 }
@@ -46,7 +53,6 @@ export async function extractEmailsFromUrl(startUrl, deep = false, maxPages = 10
   const visited = new Set();
   const queue = [startUrl];
   let processed = 0;
-
   while (queue.length && processed < maxPages) {
     const current = queue.shift();
     if (visited.has(current)) continue;
@@ -61,7 +67,7 @@ export async function extractEmailsFromUrl(startUrl, deep = false, maxPages = 10
     }
     if (deep && processed < maxPages) {
       try {
-        const $ = cheerio.load((await axios.get(current)).data);
+        const $ = await (await loadCheerio()).load((await axios.get(current)).data);
         $('a[href^="/"]').each((_, el) => {
           let href = $(el).attr('href');
           if (href && !href.startsWith('http')) href = new URL(href, current).href;
