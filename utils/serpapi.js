@@ -7,14 +7,15 @@ export const scrapeGoogleMaps = async (keyword, city, count, apiKey) => {
   const limit = Math.min(count, 50);
 
   while (allResults.length < limit) {
-    const params = {
-      engine: 'google_maps',
-      q: query,
-      type: 'search',
-      api_key: apiKey,
-      start: start
-    };
-    const response = await axios.get('https://serpapi.com/search', { params });
+    const response = await axios.get('https://serpapi.com/search', {
+      params: {
+        engine: 'google_maps',
+        q: query,
+        type: 'search',
+        api_key: apiKey,
+        start: start
+      }
+    });
     const localResults = response.data?.local_results || [];
     if (localResults.length === 0) break;
 
