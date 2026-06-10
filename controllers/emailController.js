@@ -9,6 +9,7 @@ export const extractEmails = async (req, res) => {
     const leads = await extractEmailsFromUrl(url, deep, maxPages);
     res.json({ success: true, count: leads.length, leads });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: error.message });
   }
 };
