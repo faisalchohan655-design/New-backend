@@ -1,5 +1,5 @@
 import { extractEmailsFromUrl } from '../utils/emailExtractor.js';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import Lead from '../models/Lead.js';
 
 // Single URL extraction
@@ -62,7 +62,7 @@ export const saveExtractedLeads = async (req, res) => {
   }
 };
 
-// Bulk email send (debug version – prints errors to console)
+// Bulk email send using Resend API (automatic, no manual click)
 export const bulkSendEmail = async (req, res) => {
   try {
     const { recipients, subject, message } = req.body;
@@ -73,34 +73,31 @@ export const bulkSendEmail = async (req, res) => {
       return res.status(400).json({ error: 'Max 50 recipients per batch' });
     }
 
-    console.log('EMAIL_USER present?', !!process.env.EMAIL_USER);
-    console.log('EMAIL_PASS present?', !!process.env.EMAIL_PASS);
-    console.log('Recipients count:', recipients.length);
-
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    });
-
+    const resend = new Resend(process.env.RESEND_API_KEY);
     let sent = 0;
+    let errors = [];
+
     for (const to of recipients) {
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to,
-        subject,
-        html: message
-      });
-      sent++;
+      try {
+        await resend.emails.send({
+          from: 'onboarding@resend.dev',  // Resend's free sender (change later to your domain)
+          to,
+          subject,
+          html: message
+        });
+        sent++;
+      } catch (err) {
+        errors.push({ to, error: err.message });
+      }
     }
-    res.json({ success: true, sent });
+
+    if (sent === 0) {
+      return res.status(500).json({ error: 'Failed to send any emails', details: errors });
+    }
+    res.json({ success: true, sent, errors });
   } catch (error) {
-    console.error('SMTP Error:', error);
-    res.status(500).json({ error: error.message, details: error.toString() });
+    console.error('Resend error:', error);
+    res.status(500).json({ error: error.message });
   }
 };
 
