@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import scrapeRoutes from './routes/scrape.js';
-import leadsRoutes from './routes/leads.js';
+import leadRoutes from './routes/leads.js';
 import facebookRoutes from './routes/facebook.js';
 import emailRoutes from './routes/email.js';
 
@@ -20,7 +20,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api', scrapeRoutes);
-app.use('/api', leadsRoutes);
+app.use('/api', leadRoutes);
 app.use('/api', facebookRoutes);
 app.use('/api/email', emailRoutes);
 
