@@ -3,14 +3,11 @@ import axios from 'axios';
 export const fetchFacebookPageData = async (pageUrl) => {
   const pageId = extractPageId(pageUrl);
   const accessToken = process.env.FACEBOOK_ACCESS_TOKEN;
-  if (!accessToken) throw new Error('FACEBOOK_ACCESS_TOKEN not set');
+  if (!accessToken) throw new Error('FACEBOOK_ACCESS_TOKEN missing');
 
   const url = `https://graph.facebook.com/v18.0/${pageId}`;
   const response = await axios.get(url, {
-    params: {
-      fields: 'name,about,emails,phone,website,location,fan_count',
-      access_token: accessToken
-    }
+    params: { fields: 'name,about,emails,phone,website,location,fan_count', access_token: accessToken }
   });
   const data = response.data;
   const lead = {
