@@ -1,4 +1,4 @@
-import { extractEmailsFromUrl, verifyEmail } from '../utils/emailExtractor.js';
+import { extractEmailsFromUrl } from '../utils/emailExtractor.js';
 import nodemailer from 'nodemailer';
 import Lead from '../models/Lead.js';
 
