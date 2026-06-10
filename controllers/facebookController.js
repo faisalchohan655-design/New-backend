@@ -25,6 +25,7 @@ export const scrapeFacebook = async (req, res) => {
     }
     res.json({ message: `✅ Saved ${saved.length} Facebook leads`, leads: saved });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: error.message });
   }
 };
