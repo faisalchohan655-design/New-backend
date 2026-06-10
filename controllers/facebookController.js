@@ -4,28 +4,27 @@ import Lead from '../models/Lead.js';
 export const scrapeFacebook = async (req, res) => {
   try {
     const { pageUrl, filters } = req.body;
-    if (!pageUrl) return res.status(400).json({ error: 'Facebook Page URL required' });
+    if (!pageUrl) return res.status(400).json({ error: 'Facebook URL required' });
 
-    const scrapedLeads = await fetchFacebookPageData(pageUrl);
-    if (!scrapedLeads.length) return res.json({ message: 'No leads found', leads: [] });
+    const scraped = await fetchFacebookPageData(pageUrl);
+    if (!scraped.length) return res.json({ message: 'No leads found' });
 
-    let filteredLeads = scrapedLeads;
-    if (filters?.requireEmail) filteredLeads = filteredLeads.filter(l => l.email);
-    if (filters?.requirePhone) filteredLeads = filteredLeads.filter(l => l.phone);
-    if (filters?.requireWebsite) filteredLeads = filteredLeads.filter(l => l.website);
+    let filtered = scraped;
+    if (filters?.requireEmail) filtered = filtered.filter(l => l.email);
+    if (filters?.requirePhone) filtered = filtered.filter(l => l.phone);
+    if (filters?.requireWebsite) filtered = filtered.filter(l => l.website);
 
     const saved = [];
-    for (const lead of filteredLeads) {
+    for (const lead of filtered) {
       const updated = await Lead.findOneAndUpdate(
-        { placeId: lead.placeId || lead.name },
-        { $set: { ...lead, placeId: lead.placeId || lead.name, platform: 'facebook' } },
+        { placeId: lead.placeId },
+        { $set: lead },
         { upsert: true, new: true }
       );
       saved.push(updated);
     }
-    res.json({ message: `✅ Saved ${saved.length} Facebook leads`, leads: saved });
+    res.json({ message: `Saved ${saved.length} Facebook leads`, leads: saved });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ error: error.message });
   }
 };
