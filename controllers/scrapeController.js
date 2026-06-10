@@ -5,28 +5,30 @@ export const startScraping = async (req, res) => {
   try {
     const { keyword, city, count, filters } = req.body;
     if (!keyword || !city || !count) {
-      return res.status(400).json({ error: 'Missing fields' });
+      return res.status(400).json({ error: 'Missing required fields' });
     }
     const apiKey = process.env.SERPAPI_KEY;
-    if (!apiKey) return res.status(500).json({ error: 'No SerpAPI key' });
+    if (!apiKey) return res.status(500).json({ error: 'SerpAPI key missing' });
 
-    const scraped = await scrapeGoogleMaps(keyword, city, parseInt(count), apiKey);
-    let filtered = scraped;
-    if (filters?.requireEmail) filtered = filtered.filter(l => l.email);
-    if (filters?.requirePhone) filtered = filtered.filter(l => l.phone);
-    if (filters?.requireWebsite) filtered = filtered.filter(l => l.website);
+    const scrapedLeads = await scrapeGoogleMaps(keyword, city, parseInt(count), apiKey);
 
-    const saved = [];
-    for (const lead of filtered) {
+    let filteredLeads = scrapedLeads;
+    if (filters?.requireEmail) filteredLeads = filteredLeads.filter(l => l.email);
+    if (filters?.requirePhone) filteredLeads = filteredLeads.filter(l => l.phone);
+    if (filters?.requireWebsite) filteredLeads = filteredLeads.filter(l => l.website);
+
+    const savedLeads = [];
+    for (const lead of filteredLeads) {
       const updated = await Lead.findOneAndUpdate(
         { placeId: lead.placeId },
         { $set: lead },
         { upsert: true, new: true }
       );
-      saved.push(updated);
+      savedLeads.push(updated);
     }
-    res.json({ message: `Saved ${saved.length} leads`, leads: saved });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.json({ message: `Saved ${savedLeads.length} leads`, leads: savedLeads });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
   }
 };
