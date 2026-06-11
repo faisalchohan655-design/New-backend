@@ -1,5 +1,5 @@
 import { extractEmailsFromUrl } from '../utils/emailExtractor.js';
-import { Unosend } from '@unosend/node';
+import Mailjet from 'node-mailjet';
 import Lead from '../models/Lead.js';
 
 export const extractEmails = async (req, res) => {
@@ -62,9 +62,8 @@ export const saveExtractedLeads = async (req, res) => {
 export const bulkSendEmail = async (req, res) => {
   try {
     const { recipients, subject, message } = req.body;
-    console.log('=== BULK EMAIL REQUEST ===');
-    console.log('Recipients:', recipients);
-    console.log('Subject:', subject);
+    console.log('=== BULK EMAIL REQUEST (Mailjet) ===');
+    console.log('Recipients count:', recipients?.length);
 
     if (!recipients || recipients.length === 0) {
       return res.status(400).json({ error: 'No recipients' });
@@ -73,42 +72,34 @@ export const bulkSendEmail = async (req, res) => {
       return res.status(400).json({ error: 'Max 50 recipients per batch' });
     }
 
-    if (!process.env.UNOSEND_API_KEY) {
-      console.error('❌ UNOSEND_API_KEY missing in Railway');
-      return res.status(500).json({ error: 'Server config: missing UNOSEND_API_KEY' });
+    const apiKey = process.env.MAILJET_API_KEY;
+    const secretKey = process.env.MAILJET_SECRET_KEY;
+    if (!apiKey || !secretKey) {
+      console.error('❌ Mailjet keys missing');
+      return res.status(500).json({ error: 'Server config: missing Mailjet keys' });
     }
 
-    const unosend = new Unosend({ apiKey: process.env.UNOSEND_API_KEY });
-    let sent = 0;
-    let errors = [];
+    const mailjet = Mailjet.apiConnect(apiKey, secretKey);
+    
+    const messages = recipients.map(to => ({
+      From: { Email: 'faisalchohan655@gmail.com', Name: 'LeadStriker' },
+      To: [{ Email: to }],
+      Subject: subject,
+      HTMLPart: message,
+    }));
 
-    for (const to of recipients) {
-      try {
-        const { error } = await unosend.emails.send({
-          from: 'faisalchohan655@gmail.com',
-          to: to,
-          subject: subject,
-          html: message,
-        });
-        if (error) {
-          console.error(`❌ Failed to send to ${to}:`, error);
-          errors.push({ to, error: error.message });
-        } else {
-          console.log(`✅ Sent to ${to}`);
-          sent++;
-        }
-      } catch (err) {
-        console.error(`❌ Exception for ${to}:`, err.message);
-        errors.push({ to, error: err.message });
-      }
-    }
+    const request = mailjet.post('send', { version: 'v3.1' }).request({ Messages: messages });
+    const result = await request;
 
-    if (sent === 0) {
-      return res.status(500).json({ error: 'Failed to send any emails', details: errors });
+    if (result.response.status === 200) {
+      console.log(`✅ Sent to ${recipients.length} recipients`);
+      res.json({ success: true, sent: recipients.length });
+    } else {
+      console.error('Mailjet error:', result.body);
+      res.status(500).json({ error: 'Mailjet send failed', details: result.body });
     }
-    res.json({ success: true, sent, errors });
   } catch (error) {
-    console.error('Fatal error in bulkSendEmail:', error);
+    console.error('Mailjet error:', error);
     res.status(500).json({ error: error.message });
   }
 };
