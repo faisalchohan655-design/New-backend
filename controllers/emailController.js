@@ -1,5 +1,5 @@
 import { extractEmailsFromUrl } from '../utils/emailExtractor.js';
-import { Resend } from 'resend';
+import Brevo from '@getbrevo/brevo';
 import Lead from '../models/Lead.js';
 
 // Single URL extraction
@@ -62,7 +62,7 @@ export const saveExtractedLeads = async (req, res) => {
   }
 };
 
-// Bulk email send using Resend API (automatic, no manual click)
+// Bulk email send using Brevo (free tier, no domain required)
 export const bulkSendEmail = async (req, res) => {
   try {
     const { recipients, subject, message } = req.body;
@@ -73,18 +73,21 @@ export const bulkSendEmail = async (req, res) => {
       return res.status(400).json({ error: 'Max 50 recipients per batch' });
     }
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    const apiInstance = new Brevo.TransactionalEmailsApi();
+    apiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
+
     let sent = 0;
     let errors = [];
 
     for (const to of recipients) {
+      const sendSmtpEmail = new Brevo.SendSmtpEmail();
+      sendSmtpEmail.to = [{ email: to }];
+      sendSmtpEmail.sender = { email: 'faisalchohan655@gmail.com' }; // verified sender
+      sendSmtpEmail.subject = subject;
+      sendSmtpEmail.htmlContent = message;
+
       try {
-        await resend.emails.send({
-          from: 'onboarding@resend.dev',  // Resend's free sender (change later to your domain)
-          to,
-          subject,
-          html: message
-        });
+        await apiInstance.sendTransacEmail(sendSmtpEmail);
         sent++;
       } catch (err) {
         errors.push({ to, error: err.message });
@@ -96,7 +99,7 @@ export const bulkSendEmail = async (req, res) => {
     }
     res.json({ success: true, sent, errors });
   } catch (error) {
-    console.error('Resend error:', error);
+    console.error('Brevo error:', error);
     res.status(500).json({ error: error.message });
   }
 };
