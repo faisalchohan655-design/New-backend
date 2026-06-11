@@ -1,8 +1,7 @@
 import { extractEmailsFromUrl } from '../utils/emailExtractor.js';
-import Brevo from '@getbrevo/brevo';
+import { Unosend } from '@unosend/node';
 import Lead from '../models/Lead.js';
 
-// Single URL extraction
 export const extractEmails = async (req, res) => {
   try {
     const { url, deep = false, maxPages = 10 } = req.body;
@@ -15,7 +14,6 @@ export const extractEmails = async (req, res) => {
   }
 };
 
-// Bulk URLs extraction
 export const bulkExtractEmails = async (req, res) => {
   try {
     const { urls, deep = false, maxPagesPerUrl = 5 } = req.body;
@@ -33,7 +31,6 @@ export const bulkExtractEmails = async (req, res) => {
   }
 };
 
-// Save extracted leads to database
 export const saveExtractedLeads = async (req, res) => {
   try {
     const { leads } = req.body;
@@ -62,14 +59,10 @@ export const saveExtractedLeads = async (req, res) => {
   }
 };
 
-// Bulk email send using Brevo (free tier, no domain required)
+// ✅ NEW: Bulk email send using Unosend (no IP blocking)
 export const bulkSendEmail = async (req, res) => {
   try {
     const { recipients, subject, message } = req.body;
-    console.log('=== BULK EMAIL REQUEST ===');
-    console.log('Recipients:', recipients);
-    console.log('Subject:', subject);
-
     if (!recipients || recipients.length === 0) {
       return res.status(400).json({ error: 'No recipients' });
     }
@@ -77,31 +70,31 @@ export const bulkSendEmail = async (req, res) => {
       return res.status(400).json({ error: 'Max 50 recipients per batch' });
     }
 
-    if (!process.env.BREVO_API_KEY) {
-      console.error('❌ BREVO_API_KEY missing in Railway');
-      return res.status(500).json({ error: 'Server config: missing BREVO_API_KEY' });
+    // Check API key
+    if (!process.env.UNOSEND_API_KEY) {
+      console.error('❌ UNOSEND_API_KEY missing in Railway');
+      return res.status(500).json({ error: 'Server config: missing UNOSEND_API_KEY' });
     }
 
-    const apiInstance = new Brevo.TransactionalEmailsApi();
-    apiInstance.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_API_KEY);
-
+    const unosend = new Unosend({ apiKey: process.env.UNOSEND_API_KEY });
     let sent = 0;
     let errors = [];
 
     for (const to of recipients) {
-      const sendSmtpEmail = new Brevo.SendSmtpEmail();
-      sendSmtpEmail.to = [{ email: to }];
-      sendSmtpEmail.sender = { email: 'faisalchohan655@gmail.com' };
-      sendSmtpEmail.subject = subject;
-      sendSmtpEmail.htmlContent = message;
-
       try {
-        const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
-        console.log(`✅ Sent to ${to}`, result?.messageId);
-        sent++;
+        const { error } = await unosend.emails.send({
+          from: 'faisalchohan655@gmail.com', // must be verified in Unosend dashboard
+          to: to,
+          subject: subject,
+          html: message,
+        });
+        if (error) {
+          errors.push({ to, error: error.message });
+        } else {
+          sent++;
+        }
       } catch (err) {
-        console.error(`❌ Failed to send to ${to}:`, err.response?.body || err.message);
-        errors.push({ to, error: err.response?.body?.message || err.message });
+        errors.push({ to, error: err.message });
       }
     }
 
@@ -110,23 +103,20 @@ export const bulkSendEmail = async (req, res) => {
     }
     res.json({ success: true, sent, errors });
   } catch (error) {
-    console.error('🔥 Outer catch:', error);
+    console.error('Unosend error:', error);
     res.status(500).json({ error: error.message });
   }
 };
 
-// Extract emails from lead IDs (for Website Leads page)
 export const extractEmailsFromLeadIds = async (req, res) => {
   try {
     const { leadIds, deep = false, maxPagesPerUrl = 5 } = req.body;
     if (!leadIds || !leadIds.length) {
       return res.status(400).json({ error: 'No lead IDs provided' });
     }
-
     const leads = await Lead.find({ _id: { $in: leadIds }, website: { $ne: '', $exists: true } });
     const results = [];
     let totalNewEmails = 0;
-
     for (const lead of leads) {
       const extracted = await extractEmailsFromUrl(lead.website, deep, maxPagesPerUrl);
       for (const item of extracted) {
