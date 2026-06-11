@@ -14,7 +14,7 @@
     "axios": "^1.6.2",
     "cheerio": "^1.0.0-rc.12",
     "nodemailer": "^6.9.7",
-    "@getbrevo/brevo": "^1.0.0"
+    "@unosend/node": "^3.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
