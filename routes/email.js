@@ -7,6 +7,6 @@ router.post('/extract', extractEmails);
 router.post('/bulk-extract', bulkExtractEmails);
 router.post('/save-leads', saveExtractedLeads);
 router.post('/bulk-send', bulkSendEmail);
-router.post('/bulk-extract-from-leads', extractEmailsFromLeadIds);   // ✅ new endpoint
+router.post('/bulk-extract-from-leads', extractEmailsFromLeadIds);
 
 export default router;
