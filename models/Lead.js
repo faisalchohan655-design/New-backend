@@ -7,13 +7,15 @@ const leadSchema = new mongoose.Schema({
   website: { type: String, default: '' },
   address: { type: String, default: '' },
   rating: { type: Number, default: 0 },
-  placeId: { type: String, unique: true, required: true },
+  placeId: { type: String, unique: true, required: true },  // ✅ Fixed: was "placed"
   source: { type: String, default: 'Google Maps' },
   city: { type: String, default: '' },
   interest: { type: String, default: '' },
   postUrl: { type: String, default: '' },
   snippet: { type: String, default: '' },
-  parentLeadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead', default: null }, // ✅ new field
+  parentLeadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead', default: null },
+  status: { type: String, default: 'Untouched' },           // ✅ New field for lead tracking
+  contactPerson: { type: String, default: '' },             // ✅ New field for contact name
   createdAt: { type: Date, default: Date.now }
 });
 
