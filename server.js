@@ -18,16 +18,16 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Routes
 app.use('/api', scrapeRoutes);
-app.use('/api', leadRoutes);
+app.use('/api/leads', leadRoutes);      // ✅ Fixed
 app.use('/api', facebookRoutes);
 app.use('/api/email', emailRoutes);
 
 app.get('/', (req, res) => {
-  res.json({ message: 'LeadStriker API is running', status: 'ok' });
+  res.json({ message: 'LeadConnect API is running', status: 'ok' });
 });
 
-// ✅ Use MONGODB_URI (not MONGO_DB_URL)
 mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
   .then(() => console.log('✅ MongoDB connected'))
   .catch(err => {
@@ -36,5 +36,5 @@ mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
   });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 LeadStriker backend on port ${PORT}`);
+  console.log(`🚀 LeadConnect backend on port ${PORT}`);
 });
