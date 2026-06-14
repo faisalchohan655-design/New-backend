@@ -7,34 +7,30 @@ export const scrapeGoogleMaps = async (keyword, city, count, apiKey) => {
   const limit = Math.min(count, 50);
 
   while (allResults.length < limit) {
-    try {
-      const response = await axios.get('https://serpapi.com/search', {
-        params: {
-          engine: 'google_maps',
-          q: query,
-          type: 'search',
-          api_key: apiKey,
-          start: start
-        }
-      });
-      const localResults = response.data?.local_results || [];
-      if (localResults.length === 0) break;
-      const mapped = localResults.map(place => ({
-        name: place.title || '',
-        phone: place.phone || '',
-        email: '',
-        website: place.website || '',
-        address: place.address || '',
-        rating: place.rating || 0,
-        placeId: place.place_id || `${place.title}-${place.address}`
-      }));
-      allResults.push(...mapped);
-      start += 20;
-      if (localResults.length < 20) break;
-    } catch (err) {
-      console.error('SerpAPI error:', err.message);
-      break;
-    }
+    const response = await axios.get('https://serpapi.com/search', {
+      params: {
+        engine: 'google_maps',
+        q: query,
+        type: 'search',
+        api_key: apiKey,
+        start: start
+      }
+    });
+    const localResults = response.data?.local_results || [];
+    if (localResults.length === 0) break;
+
+    const mapped = localResults.map(place => ({
+      name: place.title || '',
+      phone: place.phone || '',
+      email: '',
+      website: place.website || '',
+      address: place.address || '',
+      rating: place.rating || 0,
+      placeId: place.place_id || `${place.title}-${place.address}`
+    }));
+    allResults.push(...mapped);
+    start += 20;
+    if (localResults.length < 20) break;
   }
   return allResults.slice(0, limit);
 };
