@@ -1,7 +1,7 @@
 import axios from 'axios';
 import Lead from '../models/Lead.js';
 
-// Helper: generate mock data (only if API call fails or key missing)
+// Helper: generate mock data (fallback for other platforms)
 const generateMockResults = (platform, query, count) => {
   const results = [];
   for (let i = 1; i <= Math.min(count, 10); i++) {
@@ -20,6 +20,44 @@ const generateMockResults = (platform, query, count) => {
   return results;
 };
 
+// --- Reddit API (public, no key) ---
+const searchReddit = async (query, searchType, count) => {
+  let url = '';
+  let params = { limit: Math.min(count, 25) }; // Reddit max 25 per request
+
+  if (searchType === 'url') {
+    // If URL, assume it's a reddit post or user profile
+    // For simplicity, treat as keyword search on the URL string
+    url = 'https://www.reddit.com/search.json';
+    params.q = query;
+  } else {
+    // Keyword or location search
+    url = 'https://www.reddit.com/search.json';
+    params.q = query;
+    params.sort = 'relevance';
+  }
+
+  const response = await axios.get(url, { params });
+  const children = response.data.data?.children || [];
+
+  return children.map(child => {
+    const data = child.data;
+    return {
+      name: data.author || '[deleted]',
+      platform: 'reddit',
+      email: '',
+      phone: '',
+      website: `https://reddit.com${data.permalink}`,
+      followers: data.score || 0,
+      rating: data.upvote_ratio || 0,
+      sourceUrl: `https://reddit.com${data.permalink}`,
+      verified: false,
+      snippet: data.title || data.body || ''
+    };
+  });
+};
+
+// --- Main search dispatcher ---
 export const socialSearch = async (req, res) => {
   try {
     const { platform, searchType, query, count = 10 } = req.body;
@@ -29,58 +67,35 @@ export const socialSearch = async (req, res) => {
       return res.status(400).json({ error: 'Platform and query required' });
     }
 
-    const apiKey = process.env.SOCIAVAULT_API_KEY;
-    if (!apiKey) {
-      console.warn('⚠️ SOCIAVAULT_API_KEY missing – using mock data');
-      return res.json({ results: generateMockResults(platform, query, count), mock: true });
+    let results = [];
+    let usedMock = false;
+
+    // 1. Reddit – real, free, no API key
+    if (platform === 'reddit') {
+      try {
+        results = await searchReddit(query, searchType, count);
+        console.log(`✅ Reddit returned ${results.length} results`);
+      } catch (err) {
+        console.error('Reddit API error:', err.message);
+        results = generateMockResults(platform, query, count);
+        usedMock = true;
+      }
+    }
+    // 2. For other platforms (Facebook, LinkedIn, Instagram, TikTok) – use mock data (or future paid API)
+    else {
+      // You can later replace this with SociaVault or other APIs
+      results = generateMockResults(platform, query, count);
+      usedMock = true;
     }
 
-    // Build correct SociaVault URL
-    let url;
-    let params = {};
-
-    if (searchType === 'url') {
-      url = `https://api.sociavault.io/v1/${platform}/profile`;
-      params = { url: query };
-    } else {
-      url = `https://api.sociavault.io/v1/${platform}/search`;
-      params = { q: query, limit: count };
-    }
-
-    console.log(`🌐 Calling SociaVault: ${url}`, params);
-
-    const response = await axios.get(url, {
-      headers: { 'Authorization': `Bearer ${apiKey}` },
-      params,
-      timeout: 15000
-    });
-
-    const items = response.data.results || response.data.data || [];
-    if (!items.length) {
-      console.log('No results from SociaVault');
-      return res.json({ results: [], mock: false });
-    }
-
-    const results = items.slice(0, count).map(item => ({
-      name: item.name || item.title || item.username || '',
-      platform,
-      email: item.email || '',
-      phone: item.phone || '',
-      website: item.website || item.url || '',
-      followers: item.followers || 0,
-      rating: item.rating || 0,
-      sourceUrl: item.url || '',
-      verified: item.verified || false
-    }));
-
-    res.json({ results, mock: false });
+    res.json({ results, mock: usedMock });
   } catch (error) {
-    console.error('❌ SociaVault API error:', error.response?.data || error.message);
-    // Fallback to mock data on error
-    res.json({ results: generateMockResults(req.body.platform, req.body.query, req.body.count || 10), mock: true });
+    console.error('Search error:', error);
+    res.status(500).json({ error: error.message });
   }
 };
 
+// --- Save leads to database (unchanged) ---
 export const saveSocialLeads = async (req, res) => {
   try {
     const { leads } = req.body;
