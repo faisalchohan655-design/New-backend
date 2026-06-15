@@ -1,7 +1,7 @@
 import axios from 'axios';
 import Lead from '../models/Lead.js';
 
-// Helper: generate mock data (fallback for other platforms)
+// Helper: generate mock data (only for non‑Reddit platforms or errors)
 const generateMockResults = (platform, query, count) => {
   const results = [];
   for (let i = 1; i <= Math.min(count, 10); i++) {
@@ -20,26 +20,28 @@ const generateMockResults = (platform, query, count) => {
   return results;
 };
 
-// --- Reddit API (public, no key) ---
+// ---- Real Reddit API (public, requires User-Agent) ----
 const searchReddit = async (query, searchType, count) => {
-  let url = '';
-  let params = { limit: Math.min(count, 25) }; // Reddit max 25 per request
+  // Use Reddit's search endpoint
+  let url = 'https://www.reddit.com/search.json';
+  const params = {
+    q: query,
+    limit: Math.min(count, 25),
+    sort: 'relevance'
+  };
 
-  if (searchType === 'url') {
-    // If URL, assume it's a reddit post or user profile
-    // For simplicity, treat as keyword search on the URL string
-    url = 'https://www.reddit.com/search.json';
-    params.q = query;
-  } else {
-    // Keyword or location search
-    url = 'https://www.reddit.com/search.json';
-    params.q = query;
-    params.sort = 'relevance';
-  }
+  // If searchType is 'url', we treat the query as a URL and search for it
+  // (Reddit search works fine with URL strings)
 
-  const response = await axios.get(url, { params });
+  const response = await axios.get(url, {
+    params,
+    headers: {
+      'User-Agent': 'LeadConnect/1.0 (https://leadconnect.app)'
+    },
+    timeout: 10000
+  });
+
   const children = response.data.data?.children || [];
-
   return children.map(child => {
     const data = child.data;
     return {
@@ -52,12 +54,12 @@ const searchReddit = async (query, searchType, count) => {
       rating: data.upvote_ratio || 0,
       sourceUrl: `https://reddit.com${data.permalink}`,
       verified: false,
-      snippet: data.title || data.body || ''
+      snippet: data.title || data.selftext || ''
     };
   });
 };
 
-// --- Main search dispatcher ---
+// ---- Main search dispatcher ----
 export const socialSearch = async (req, res) => {
   try {
     const { platform, searchType, query, count = 10 } = req.body;
@@ -70,20 +72,19 @@ export const socialSearch = async (req, res) => {
     let results = [];
     let usedMock = false;
 
-    // 1. Reddit – real, free, no API key
+    // Reddit – real data
     if (platform === 'reddit') {
       try {
         results = await searchReddit(query, searchType, count);
-        console.log(`✅ Reddit returned ${results.length} results`);
+        console.log(`✅ Reddit returned ${results.length} real posts`);
       } catch (err) {
-        console.error('Reddit API error:', err.message);
+        console.error('❌ Reddit API error:', err.message);
+        // Fallback to mock data only if the API call fails
         results = generateMockResults(platform, query, count);
         usedMock = true;
       }
-    }
-    // 2. For other platforms (Facebook, LinkedIn, Instagram, TikTok) – use mock data (or future paid API)
-    else {
-      // You can later replace this with SociaVault or other APIs
+    } else {
+      // For other platforms, still use mock (can be replaced with paid APIs later)
       results = generateMockResults(platform, query, count);
       usedMock = true;
     }
@@ -95,7 +96,7 @@ export const socialSearch = async (req, res) => {
   }
 };
 
-// --- Save leads to database (unchanged) ---
+// ---- Save leads to database (unchanged) ----
 export const saveSocialLeads = async (req, res) => {
   try {
     const { leads } = req.body;
