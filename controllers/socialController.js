@@ -1,7 +1,7 @@
 import axios from 'axios';
 import Lead from '../models/Lead.js';
 
-// Helper for mock data (used only when API key is missing)
+// Helper: generate mock data (only when API key is missing or API fails)
 const generateMockResults = (platform, query, count) => {
   const results = [];
   for (let i = 1; i <= Math.min(count, 10); i++) {
@@ -20,42 +20,58 @@ const generateMockResults = (platform, query, count) => {
   return results;
 };
 
-// Real SociaVault search by keyword or URL
-const searchWithSociaVault = async (platform, searchType, query, count) => {
+// Real SociaVault API call
+const fetchFromSociaVault = async (platform, searchType, query, count) => {
   const apiKey = process.env.SOCIAVAULT_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.warn('SOCIAVAULT_API_KEY is missing. Using mock data.');
+    return null;
+  }
 
-  // SociaVault endpoints (adjust based on their API docs)
-  // For demo, we'll use a generic search endpoint
+  // SociaVault API endpoint (adjust based on their actual documentation)
   let endpoint = '';
   let params = {};
 
   if (searchType === 'url') {
-    endpoint = `/${platform}/info`;
+    endpoint = `/v1/${platform}/info`;
     params = { url: query };
   } else {
-    endpoint = `/${platform}/search`;
+    endpoint = `/v1/${platform}/search`;
     params = { q: query, limit: count };
   }
 
-  const response = await axios.get(`https://api.sociavault.io/v1${endpoint}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-    params
-  });
+  const url = `https://api.sociavault.io${endpoint}`;
+  console.log(`Calling SociaVault: ${url}`, params);
 
-  // Transform SociaVault response to our unified format
-  const items = response.data.results || response.data.data || [];
-  return items.slice(0, count).map(item => ({
-    name: item.name || item.title || item.username || '',
-    platform: platform,
-    email: item.email || '',
-    phone: item.phone || '',
-    website: item.website || item.url || '',
-    followers: item.followers || item.fan_count || 0,
-    rating: item.rating || item.stars || 0,
-    sourceUrl: item.url || item.profile_url || '',
-    verified: item.verified || false
-  }));
+  try {
+    const response = await axios.get(url, {
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      params
+    });
+
+    // SociaVault response may have different structure. Adjust mapping as needed.
+    const items = response.data.results || response.data.data || response.data.items || [];
+    if (!items.length) {
+      console.log('No results from SociaVault');
+      return [];
+    }
+
+    // Transform to our unified format
+    return items.slice(0, count).map(item => ({
+      name: item.name || item.title || item.username || '',
+      platform: platform,
+      email: item.email || item.contact_email || '',
+      phone: item.phone || item.contact_phone || '',
+      website: item.website || item.url || '',
+      followers: item.followers || item.fan_count || 0,
+      rating: item.rating || item.stars || 0,
+      sourceUrl: item.url || item.profile_url || '',
+      verified: item.verified || false
+    }));
+  } catch (error) {
+    console.error('SociaVault API error:', error.response?.data || error.message);
+    return null; // signal to fallback to mock
+  }
 };
 
 export const socialSearch = async (req, res) => {
@@ -68,22 +84,22 @@ export const socialSearch = async (req, res) => {
     let results = [];
     let usedMock = false;
 
-    // Try real SociaVault API
-    try {
-      results = await searchWithSociaVault(platform, searchType, query, count);
-      if (results && results.length) {
-        return res.json({ results, mock: false });
-      }
-    } catch (err) {
-      console.error('SociaVault error:', err.message);
+    // Try real API
+    const realResults = await fetchFromSociaVault(platform, searchType, query, count);
+    if (realResults && realResults.length) {
+      results = realResults;
+    } else if (realResults === null) {
+      // API call failed or key missing → fallback to mock
+      results = generateMockResults(platform, query, count);
+      usedMock = true;
+    } else {
+      // No results but API succeeded → empty array (no mock)
+      results = [];
     }
 
-    // Fallback to mock data
-    results = generateMockResults(platform, query, count);
-    usedMock = true;
-    return res.json({ results, mock: usedMock });
+    res.json({ results, mock: usedMock });
   } catch (error) {
-    console.error(error);
+    console.error('Search error:', error);
     res.status(500).json({ error: error.message });
   }
 };
