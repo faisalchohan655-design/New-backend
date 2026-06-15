@@ -1,7 +1,6 @@
 import axios from 'axios';
 import Lead from '../models/Lead.js';
 
-// Helper: generate mock data (only if API key is missing or call fails)
 const generateMockResults = (platform, query, count) => {
   const results = [];
   for (let i = 1; i <= Math.min(count, 10); i++) {
@@ -35,19 +34,19 @@ export const socialSearch = async (req, res) => {
       return res.json({ results: generateMockResults(platform, query, count), mock: true });
     }
 
-    // ✅ Correct SociaVault domain and endpoints
-    let endpoint;
+    // ✅ Build correct URL
+    let path;
     let params = {};
 
     if (searchType === 'url') {
-      endpoint = `/${platform}/profile`;
+      path = `/${platform}/profile`;
       params = { url: query };
     } else {
-      endpoint = `/${platform}/search`;
+      path = `/${platform}/search`;
       params = { q: query, limit: count };
     }
 
-    const url = `https://api.sociavault.io/v1${endpoint}`;
+    const url = `https://api.sociavault.io/v1${path}`;
     console.log(`🌐 Calling SociaVault: ${url}`, params);
 
     const response = await axios.get(url, {
@@ -77,7 +76,7 @@ export const socialSearch = async (req, res) => {
     res.json({ results, mock: false });
   } catch (error) {
     console.error('❌ SociaVault API error:', error.response?.data || error.message);
-    // Fallback to mock data on error
+    // Fallback to mock data
     res.json({ results: generateMockResults(req.body.platform, req.body.query, req.body.count || 10), mock: true });
   }
 };
