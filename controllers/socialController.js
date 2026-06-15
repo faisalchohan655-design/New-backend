@@ -1,7 +1,7 @@
 import axios from 'axios';
 import Lead from '../models/Lead.js';
 
-// Helper: generate mock data (only as fallback)
+// Helper: generate mock data (only if API key is missing or call fails)
 const generateMockResults = (platform, query, count) => {
   const results = [];
   for (let i = 1; i <= Math.min(count, 10); i++) {
@@ -22,7 +22,7 @@ const generateMockResults = (platform, query, count) => {
 
 export const socialSearch = async (req, res) => {
   try {
-    const { platform, searchType, query, count = 10, deepCrawl, verifiedOnly } = req.body;
+    const { platform, searchType, query, count = 10 } = req.body;
     console.log('📨 Incoming search:', { platform, searchType, query, count });
 
     if (!platform || !query) {
@@ -35,7 +35,7 @@ export const socialSearch = async (req, res) => {
       return res.json({ results: generateMockResults(platform, query, count), mock: true });
     }
 
-    // Build correct SociaVault endpoint
+    // ✅ Correct SociaVault domain and endpoints
     let endpoint;
     let params = {};
 
@@ -53,7 +53,7 @@ export const socialSearch = async (req, res) => {
     const response = await axios.get(url, {
       headers: { 'Authorization': `Bearer ${apiKey}` },
       params,
-      timeout: 10000
+      timeout: 15000
     });
 
     const items = response.data.results || response.data.data || [];
@@ -65,12 +65,12 @@ export const socialSearch = async (req, res) => {
     const results = items.slice(0, count).map(item => ({
       name: item.name || item.title || item.username || '',
       platform,
-      email: item.email || item.contact_email || '',
-      phone: item.phone || item.contact_phone || '',
+      email: item.email || '',
+      phone: item.phone || '',
       website: item.website || item.url || '',
-      followers: item.followers || item.fan_count || 0,
-      rating: item.rating || item.stars || 0,
-      sourceUrl: item.url || item.profile_url || '',
+      followers: item.followers || 0,
+      rating: item.rating || 0,
+      sourceUrl: item.url || '',
       verified: item.verified || false
     }));
 
