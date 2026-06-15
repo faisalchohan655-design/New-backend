@@ -2,7 +2,6 @@ import axios from 'axios';
 import Lead from '../models/Lead.js';
 
 const generateMockResults = (platform, query, count) => {
-  // ... (same mock generator as before, unchanged) ...
   const results = [];
   for (let i = 1; i <= Math.min(count, 10); i++) {
     results.push({
@@ -22,9 +21,22 @@ const generateMockResults = (platform, query, count) => {
 
 export const socialSearch = async (req, res) => {
   try {
-    const { platform, searchType, query, count = 10 } = req.body;
+    console.log('📨 Received request body:', JSON.stringify(req.body, null, 2));
+    let { platform, searchType, query, count = 10 } = req.body;
+
+    // Normalize platform to lowercase and remove any unexpected characters
+    if (platform && typeof platform === 'string') {
+      platform = platform.toLowerCase().replace(/[^a-z]/g, '');
+    }
+
     if (!platform || !query) {
       return res.status(400).json({ error: 'Platform and query required' });
+    }
+
+    const validPlatforms = ['facebook', 'linkedin', 'instagram', 'reddit', 'tiktok'];
+    if (!validPlatforms.includes(platform)) {
+      console.error(`❌ Invalid platform received: "${platform}"`);
+      return res.status(400).json({ error: `Invalid platform. Must be one of: ${validPlatforms.join(', ')}` });
     }
 
     const apiKey = process.env.SOCIAVAULT_API_KEY;
@@ -33,16 +45,15 @@ export const socialSearch = async (req, res) => {
       return res.json({ results: generateMockResults(platform, query, count), mock: true });
     }
 
-    // Build SociaVault URL (adjust based on actual API docs)
+    // Build SociaVault URL
     let url;
     if (searchType === 'url') {
       url = `https://api.sociavault.io/v1/${platform}/profile`;
     } else {
       url = `https://api.sociavault.io/v1/${platform}/search`;
     }
-
     const params = searchType === 'url' ? { url: query } : { q: query, limit: count };
-    console.log(`Calling SociaVault: ${url}`, params);
+    console.log(`🔍 Calling SociaVault: ${url}`, params);
 
     const response = await axios.get(url, {
       headers: { 'Authorization': `Bearer ${apiKey}` },
@@ -50,15 +61,10 @@ export const socialSearch = async (req, res) => {
       timeout: 10000
     });
 
-    let items = response.data.results || response.data.data || [];
-    if (!items.length) {
-      console.log('No results from SociaVault');
-      return res.json({ results: [], mock: false });
-    }
-
+    const items = response.data.results || response.data.data || [];
     const results = items.slice(0, count).map(item => ({
       name: item.name || item.title || item.username || '',
-      platform: platform,
+      platform,
       email: item.email || '',
       phone: item.phone || '',
       website: item.website || item.url || '',
@@ -71,7 +77,7 @@ export const socialSearch = async (req, res) => {
     res.json({ results, mock: false });
   } catch (error) {
     console.error('SociaVault error:', error.response?.data || error.message);
-    // Fallback to mock data on error
+    // Fallback to mock
     res.json({ results: generateMockResults(req.body.platform, req.body.query, req.body.count || 10), mock: true });
   }
 };
