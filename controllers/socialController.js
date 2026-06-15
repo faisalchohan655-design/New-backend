@@ -1,8 +1,8 @@
 import axios from 'axios';
 import Lead from '../models/Lead.js';
 
-// Helper: generate mock data (only when API key is missing or API fails)
 const generateMockResults = (platform, query, count) => {
+  // ... (same mock generator as before, unchanged) ...
   const results = [];
   for (let i = 1; i <= Math.min(count, 10); i++) {
     results.push({
@@ -20,60 +20,6 @@ const generateMockResults = (platform, query, count) => {
   return results;
 };
 
-// Real SociaVault API call
-const fetchFromSociaVault = async (platform, searchType, query, count) => {
-  const apiKey = process.env.SOCIAVAULT_API_KEY;
-  if (!apiKey) {
-    console.warn('SOCIAVAULT_API_KEY is missing. Using mock data.');
-    return null;
-  }
-
-  // SociaVault API endpoint (adjust based on their actual documentation)
-  let endpoint = '';
-  let params = {};
-
-  if (searchType === 'url') {
-    endpoint = `/v1/${platform}/info`;
-    params = { url: query };
-  } else {
-    endpoint = `/v1/${platform}/search`;
-    params = { q: query, limit: count };
-  }
-
-  const url = `https://api.sociavault.io${endpoint}`;
-  console.log(`Calling SociaVault: ${url}`, params);
-
-  try {
-    const response = await axios.get(url, {
-      headers: { 'Authorization': `Bearer ${apiKey}` },
-      params
-    });
-
-    // SociaVault response may have different structure. Adjust mapping as needed.
-    const items = response.data.results || response.data.data || response.data.items || [];
-    if (!items.length) {
-      console.log('No results from SociaVault');
-      return [];
-    }
-
-    // Transform to our unified format
-    return items.slice(0, count).map(item => ({
-      name: item.name || item.title || item.username || '',
-      platform: platform,
-      email: item.email || item.contact_email || '',
-      phone: item.phone || item.contact_phone || '',
-      website: item.website || item.url || '',
-      followers: item.followers || item.fan_count || 0,
-      rating: item.rating || item.stars || 0,
-      sourceUrl: item.url || item.profile_url || '',
-      verified: item.verified || false
-    }));
-  } catch (error) {
-    console.error('SociaVault API error:', error.response?.data || error.message);
-    return null; // signal to fallback to mock
-  }
-};
-
 export const socialSearch = async (req, res) => {
   try {
     const { platform, searchType, query, count = 10 } = req.body;
@@ -81,26 +27,52 @@ export const socialSearch = async (req, res) => {
       return res.status(400).json({ error: 'Platform and query required' });
     }
 
-    let results = [];
-    let usedMock = false;
-
-    // Try real API
-    const realResults = await fetchFromSociaVault(platform, searchType, query, count);
-    if (realResults && realResults.length) {
-      results = realResults;
-    } else if (realResults === null) {
-      // API call failed or key missing → fallback to mock
-      results = generateMockResults(platform, query, count);
-      usedMock = true;
-    } else {
-      // No results but API succeeded → empty array (no mock)
-      results = [];
+    const apiKey = process.env.SOCIAVAULT_API_KEY;
+    if (!apiKey) {
+      console.warn('SOCIAVAULT_API_KEY missing – returning mock data');
+      return res.json({ results: generateMockResults(platform, query, count), mock: true });
     }
 
-    res.json({ results, mock: usedMock });
+    // Build SociaVault URL (adjust based on actual API docs)
+    let url;
+    if (searchType === 'url') {
+      url = `https://api.sociavault.io/v1/${platform}/profile`;
+    } else {
+      url = `https://api.sociavault.io/v1/${platform}/search`;
+    }
+
+    const params = searchType === 'url' ? { url: query } : { q: query, limit: count };
+    console.log(`Calling SociaVault: ${url}`, params);
+
+    const response = await axios.get(url, {
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      params,
+      timeout: 10000
+    });
+
+    let items = response.data.results || response.data.data || [];
+    if (!items.length) {
+      console.log('No results from SociaVault');
+      return res.json({ results: [], mock: false });
+    }
+
+    const results = items.slice(0, count).map(item => ({
+      name: item.name || item.title || item.username || '',
+      platform: platform,
+      email: item.email || '',
+      phone: item.phone || '',
+      website: item.website || item.url || '',
+      followers: item.followers || 0,
+      rating: item.rating || 0,
+      sourceUrl: item.url || '',
+      verified: item.verified || false
+    }));
+
+    res.json({ results, mock: false });
   } catch (error) {
-    console.error('Search error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('SociaVault error:', error.response?.data || error.message);
+    // Fallback to mock data on error
+    res.json({ results: generateMockResults(req.body.platform, req.body.query, req.body.count || 10), mock: true });
   }
 };
 
@@ -110,15 +82,9 @@ export const saveSocialLeads = async (req, res) => {
     if (!leads || !leads.length) {
       return res.status(400).json({ error: 'No leads to save' });
     }
-
     const saved = [];
     for (const lead of leads) {
-      const existing = await Lead.findOne({
-        $or: [
-          { email: lead.email },
-          { placeId: `${lead.platform}_${lead.sourceUrl || lead.name}` }
-        ]
-      });
+      const existing = await Lead.findOne({ email: lead.email });
       if (!existing) {
         const newLead = new Lead({
           name: lead.name,
