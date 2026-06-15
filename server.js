@@ -4,9 +4,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import scrapeRoutes from './routes/scrape.js';
 import leadRoutes from './routes/leads.js';
-import facebookRoutes from './routes/facebook.js';
 import emailRoutes from './routes/email.js';
-import socialRoutes from './routes/social.js';      // ✅ Added Phase 2 social routes
+import socialRoutes from './routes/social.js';
 
 dotenv.config();
 
@@ -23,15 +22,13 @@ app.use(express.json());
 // Routes
 app.use('/api', scrapeRoutes);
 app.use('/api/leads', leadRoutes);
-app.use('/api', facebookRoutes);
 app.use('/api/email', emailRoutes);
-app.use('/api/social', socialRoutes);              // ✅ Social insights endpoints
+app.use('/api/social', socialRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'LeadConnect API is running', status: 'ok' });
 });
 
-// Fixed: Use MONGODB_URI (not MONGOURL)
 mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
   .then(() => console.log('✅ MongoDB connected!'))
   .catch(err => {
