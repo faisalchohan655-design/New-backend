@@ -1,38 +1,36 @@
-import axios from 'axios';
 import Lead from '../models/Lead.js';
 
-const SOCIAVAULT_API_KEY = process.env.SOCIAVAULT_API_KEY;
-const SOCIAVAULT_BASE_URL = 'https://api.sociavault.io/v1';
+// Helper: generate mock data (for testing without API key)
+const generateMockResults = (platform, query, count) => {
+  const results = [];
+  for (let i = 1; i <= Math.min(count, 10); i++) {
+    results.push({
+      name: `${platform.charAt(0).toUpperCase() + platform.slice(1)} Business ${i}`,
+      platform: platform,
+      email: `contact${i}@${query?.replace(/\s/g, '') || 'example'}.com`,
+      phone: `+92300100000${i}`,
+      website: `https://www.${query?.replace(/\s/g, '') || 'example'}.com/${i}`,
+      followers: Math.floor(Math.random() * 10000),
+      rating: (Math.random() * 5).toFixed(1),
+      sourceUrl: `https://${platform}.com/profile/${i}`,
+      verified: i % 2 === 0
+    });
+  }
+  return results;
+};
 
-// Search social media
+// Search endpoint (returns mock data until SociaVault API is integrated)
 export const socialSearch = async (req, res) => {
   try {
-    const { platform, searchType, query, count = 10, deepCrawl, verifiedOnly } = req.body;
-    if (!platform || !query) return res.status(400).json({ error: 'Platform and query required' });
-
-    if (!SOCIAVAULT_API_KEY) {
-      // Return mock data for testing
-      const mockResults = [];
-      for (let i = 1; i <= Math.min(count, 10); i++) {
-        mockResults.push({
-          name: `${platform.charAt(0).toUpperCase() + platform.slice(1)} Business ${i}`,
-          platform: platform,
-          email: `contact${i}@${query.replace(/\s/g, '')}.com`,
-          phone: `+92300100000${i}`,
-          website: `https://www.${query.replace(/\s/g, '')}.com/${i}`,
-          followers: Math.floor(Math.random() * 10000),
-          rating: (Math.random() * 5).toFixed(1),
-          sourceUrl: `https://${platform}.com/profile/${i}`,
-          verified: i % 2 === 0
-        });
-      }
-      return res.json({ results: mockResults, mock: true });
+    const { platform, searchType, query, count = 10 } = req.body;
+    if (!platform || !query) {
+      return res.status(400).json({ error: 'Platform and query required' });
     }
 
-    // Real SociaVault call – implement according to their API docs
-    // For now, return mock data with a warning
-    console.warn('SociaVault integration not fully implemented yet. Using mock data.');
-    return res.json({ results: [] });
+    // For now, always return mock data
+    // Later you can replace with real SociaVault API call
+    const results = generateMockResults(platform, query, count);
+    res.json({ results, mock: true });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -49,7 +47,7 @@ export const saveSocialLeads = async (req, res) => {
 
     const saved = [];
     for (const lead of leads) {
-      // Check if lead already exists by email or unique identifier
+      // Check if lead already exists (by email or unique ID)
       const existing = await Lead.findOne({ 
         $or: [
           { email: lead.email },
