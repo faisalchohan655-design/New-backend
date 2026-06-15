@@ -1,7 +1,7 @@
 import axios from 'axios';
 import Lead from '../models/Lead.js';
 
-// Helper: generate mock data (only for non‑Reddit platforms or errors)
+// Mock data generator (fallback)
 const generateMockResults = (platform, query, count) => {
   const results = [];
   for (let i = 1; i <= Math.min(count, 10); i++) {
@@ -20,21 +20,13 @@ const generateMockResults = (platform, query, count) => {
   return results;
 };
 
-// ---- Real Reddit API (public, requires User-Agent) ----
-const searchReddit = async (query, searchType, count) => {
-  // Use Reddit's search endpoint
-  let url = 'https://www.reddit.com/search.json';
-  const params = {
-    q: query,
-    limit: Math.min(count, 25),
-    sort: 'relevance'
-  };
-
-  // If searchType is 'url', we treat the query as a URL and search for it
-  // (Reddit search works fine with URL strings)
+// Real Reddit search (with proper encoding)
+const searchReddit = async (query, count) => {
+  // Encode query properly: replace spaces with '+'
+  const encodedQuery = encodeURIComponent(query).replace(/%20/g, '+');
+  const url = `https://www.reddit.com/search.json?q=${encodedQuery}&limit=${Math.min(count, 25)}&sort=relevance`;
 
   const response = await axios.get(url, {
-    params,
     headers: {
       'User-Agent': 'LeadConnect/1.0 (https://leadconnect.app)'
     },
@@ -59,7 +51,6 @@ const searchReddit = async (query, searchType, count) => {
   });
 };
 
-// ---- Main search dispatcher ----
 export const socialSearch = async (req, res) => {
   try {
     const { platform, searchType, query, count = 10 } = req.body;
@@ -72,19 +63,18 @@ export const socialSearch = async (req, res) => {
     let results = [];
     let usedMock = false;
 
-    // Reddit – real data
     if (platform === 'reddit') {
       try {
-        results = await searchReddit(query, searchType, count);
+        results = await searchReddit(query, count);
         console.log(`✅ Reddit returned ${results.length} real posts`);
       } catch (err) {
-        console.error('❌ Reddit API error:', err.message);
-        // Fallback to mock data only if the API call fails
+        console.error('❌ Reddit API error:', err.response?.status, err.message);
+        // Fallback to mock data
         results = generateMockResults(platform, query, count);
         usedMock = true;
       }
     } else {
-      // For other platforms, still use mock (can be replaced with paid APIs later)
+      // Other platforms still use mock (upgrade later)
       results = generateMockResults(platform, query, count);
       usedMock = true;
     }
@@ -96,7 +86,6 @@ export const socialSearch = async (req, res) => {
   }
 };
 
-// ---- Save leads to database (unchanged) ----
 export const saveSocialLeads = async (req, res) => {
   try {
     const { leads } = req.body;
