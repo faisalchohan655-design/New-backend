@@ -29,6 +29,7 @@ app.get('/', (req, res) => {
   res.json({ message: 'LeadConnect API is running', status: 'ok' });
 });
 
+// ✅ Fixed: Use MONGODB_URI (not MONGODB_URL)
 mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
   .then(() => console.log('✅ MongoDB connected!'))
   .catch(err => {
