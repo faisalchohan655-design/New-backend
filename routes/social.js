@@ -3,10 +3,7 @@ import { socialSearch, saveSocialLeads } from '../controllers/socialController.j
 
 const router = express.Router();
 
-// Search social media platforms
 router.post('/search', socialSearch);
-
-// Save extracted leads to database
 router.post('/save-leads', saveSocialLeads);
 
 export default router;
