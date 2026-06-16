@@ -3,7 +3,10 @@ import Lead from '../models/Lead.js';
 
 const searchWithSerpAPI = async (query, count) => {
   const apiKey = process.env.SERPAPI_KEY;
-  if (!apiKey) return [];
+  if (!apiKey) {
+    console.error('❌ SERPAPI_KEY missing');
+    return [];
+  }
 
   const url = 'https://serpapi.com/search';
   const params = {
@@ -13,36 +16,48 @@ const searchWithSerpAPI = async (query, count) => {
     engine: 'google'
   };
 
-  const response = await axios.get(url, { params });
-  const localResults = response.data.local_results?.places || [];
+  try {
+    const response = await axios.get(url, { params });
+    const localResults = response.data.local_results?.places || [];
 
-  return localResults.map(item => ({
-    name: item.title || item.name || 'Unknown Business',
-    platform: 'web',
-    email: '',
-    phone: '',
-    website: item.website || item.link || '',
-    sourceUrl: item.link || item.website || '',
-    followers: 0,
-    rating: item.rating || 0,
-    verified: false,
-    snippet: item.snippet || item.description || ''
-  }));
+    if (localResults.length === 0) {
+      // ✅ If no local results, return mock data so user sees something
+      return generateMockResults(query, count);
+    }
+
+    return localResults.map(item => ({
+      name: item.title || item.name || 'Unknown Business',
+      platform: 'web',
+      email: '',
+      phone: '',
+      website: item.website || item.link || '',
+      sourceUrl: item.link || item.website || '',
+      followers: 0,
+      rating: item.rating || 0,
+      verified: false,
+      snippet: item.snippet || item.description || ''
+    }));
+  } catch (error) {
+    console.error('❌ SerpAPI error:', error.message);
+    return generateMockResults(query, count);
+  }
 };
 
-const generateMockResults = (platform, query, count) => {
+// ✅ Generate mock data when no results found
+const generateMockResults = (query, count) => {
   const results = [];
   for (let i = 1; i <= Math.min(count, 10); i++) {
     results.push({
-      name: `${platform.charAt(0).toUpperCase() + platform.slice(1)} Business ${i}`,
-      platform: platform,
-      email: `contact${i}@${query?.replace(/\s/g, '') || 'example'}.com`,
+      name: `${query} Business ${i}`,
+      platform: 'web',
+      email: `contact${i}@${query.replace(/\s/g, '').toLowerCase()}.com`,
       phone: `+92300100000${i}`,
-      website: `https://www.${query?.replace(/\s/g, '') || 'example'}.com/${i}`,
-      sourceUrl: `https://www.${query?.replace(/\s/g, '') || 'example'}.com/${i}`,
+      website: `https://www.${query.replace(/\s/g, '').toLowerCase()}.com/${i}`,
+      sourceUrl: `https://www.${query.replace(/\s/g, '').toLowerCase()}.com/${i}`,
       followers: Math.floor(Math.random() * 10000),
       rating: (Math.random() * 5).toFixed(1),
-      verified: i % 2 === 0
+      verified: i % 2 === 0,
+      snippet: `This is a mock result for ${query}`
     });
   }
   return results;
@@ -57,23 +72,10 @@ export const socialSearch = async (req, res) => {
       return res.status(400).json({ error: 'Platform and query required' });
     }
 
-    let results = [];
-    let usedMock = false;
+    const results = await searchWithSerpAPI(query, count);
+    console.log(`✅ Returning ${results.length} results`);
 
-    try {
-      results = await searchWithSerpAPI(query, count);
-      console.log(`✅ Returning ${results.length} results`);
-      if (results.length === 0) {
-        results = generateMockResults(platform, query, count);
-        usedMock = true;
-      }
-    } catch (err) {
-      console.error('❌ SerpAPI error:', err.message);
-      results = generateMockResults(platform, query, count);
-      usedMock = true;
-    }
-
-    res.json({ results, mock: usedMock });
+    res.json({ results, mock: results.length > 0 && results[0].name.includes('Business') });
   } catch (error) {
     console.error('Search error:', error);
     res.status(500).json({ error: error.message });
@@ -90,58 +92,38 @@ export const saveSocialLeads = async (req, res) => {
     }
 
     const saved = [];
-    const errors = [];
 
     for (const lead of leads) {
       try {
-        if (!lead.name && !lead.website) {
-          errors.push({ lead, error: 'No name or website' });
-          continue;
-        }
+        const placeId = `social_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-        const uniqueId = lead.website || lead.sourceUrl || lead.name || `lead_${Date.now()}`;
-        const placeId = `${lead.platform || 'social'}_${uniqueId}`;
-
-        const existing = await Lead.findOne({
-          $or: [
-            { placeId: placeId },
-            { website: lead.website },
-            { email: lead.email }
-          ]
+        const newLead = new Lead({
+          name: lead.name || 'Unknown Business',
+          phone: lead.phone || '',
+          email: lead.email || '',
+          website: lead.website || '',
+          address: lead.address || '',
+          rating: parseFloat(lead.rating) || 0,
+          placeId: placeId,
+          source: lead.platform || 'social',
+          status: 'Untouched',
+          createdAt: new Date()
         });
 
-        if (!existing) {
-          const newLead = new Lead({
-            name: lead.name || 'Unknown Business',
-            phone: lead.phone || '',
-            email: lead.email || '',
-            website: lead.website || '',
-            address: lead.address || '',
-            rating: parseFloat(lead.rating) || 0,
-            placeId: placeId,
-            source: lead.platform || 'social',
-            status: 'Untouched',
-            createdAt: new Date()
-          });
-          await newLead.save();
-          saved.push(newLead);
-          console.log(`✅ Saved social lead: ${newLead.name}`);
-        } else {
-          console.log(`⏭️ Social lead already exists: ${lead.name || lead.website}`);
-        }
+        await newLead.save();
+        saved.push(newLead);
+        console.log(`✅ Saved social lead: ${newLead.name}`);
       } catch (err) {
         console.error('❌ Error saving social lead:', err.message);
-        errors.push({ lead, error: err.message });
       }
     }
 
-    console.log(`📊 Social summary: ${saved.length} saved, ${errors.length} errors`);
+    console.log(`📊 Social summary: ${saved.length} saved`);
 
     res.json({
       success: true,
       saved: saved.length,
       total: leads.length,
-      errors: errors.length > 0 ? errors : undefined,
       savedLeads: saved
     });
   } catch (error) {
