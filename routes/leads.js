@@ -10,7 +10,7 @@ router.get('/', getAllLeads);
 // DELETE a lead
 router.delete('/:id', deleteLead);
 
-// PATCH update lead (status, contactPerson)
+// PATCH update lead (status, contactPerson, etc.)
 router.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -23,7 +23,7 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-// ✅ NEW: Bulk save leads (for Social Insights)
+// BULK SAVE leads (for Social Insights)
 router.post('/bulk', saveBulkLeads);
 
 export default router;
