@@ -34,7 +34,7 @@ export const saveBulkLeads = async (req, res) => {
             name: lead.name || 'Unknown Business',
             phone: lead.phone || '',
             email: lead.email || '',
-            website: lead.website || '',
+            website: lead.website || '',  // ✅ FIXED: was "leadsController.js"
             address: lead.address || '',
             rating: parseFloat(lead.rating) || 0,
             placeId: placeId,
@@ -61,7 +61,7 @@ export const saveBulkLeads = async (req, res) => {
       saved: saved.length,
       total: leads.length,
       errors: errors.length > 0 ? errors : undefined,
-      savedLeads: saved // return saved leads for debugging
+      savedLeads: saved
     });
   } catch (error) {
     console.error('❌ Bulk save error:', error);
