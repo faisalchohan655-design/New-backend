@@ -47,10 +47,13 @@ export const saveBulkLeads = async (req, res) => {
           continue;
         }
 
-        const placeId = `${lead.platform || 'social'}_${lead.website || lead.sourceUrl || Date.now()}`;
+        // Create unique placeId from website, sourceUrl, or name
+        const uniqueId = lead.website || lead.sourceUrl || lead.name || `lead_${Date.now()}`;
+        const placeId = `${lead.platform || 'social'}_${uniqueId}`;
 
         const existing = await Lead.findOne({
           $or: [
+            { placeId: placeId },
             { website: lead.website },
             { email: lead.email }
           ]
@@ -71,9 +74,9 @@ export const saveBulkLeads = async (req, res) => {
           });
           await newLead.save();
           saved.push(newLead);
-          console.log(`✅ Saved lead: ${newLead.name}`);
+          console.log(`✅ Saved lead: ${newLead.name} (${newLead.placeId})`);
         } else {
-          console.log(`⏭️ Lead already exists: ${lead.website || lead.email}`);
+          console.log(`⏭️ Lead already exists: ${lead.name || lead.website}`);
         }
       } catch (err) {
         console.error('❌ Error saving lead:', err.message);
