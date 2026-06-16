@@ -1,3 +1,33 @@
+import Lead from '../models/Lead.js';
+
+// GET all leads
+export const getAllLeads = async (req, res) => {
+  try {
+    const leads = await Lead.find().sort({ createdAt: -1 });
+    console.log(`Fetched ${leads.length} leads from database`);
+    res.status(200).json(leads);
+  } catch (error) {
+    console.error('Error fetching leads:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// DELETE a single lead
+export const deleteLead = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await Lead.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+    res.status(200).json({ message: 'Lead deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting lead:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// BULK SAVE leads (for Social Insights)
 export const saveBulkLeads = async (req, res) => {
   try {
     const { leads } = req.body;
@@ -12,16 +42,13 @@ export const saveBulkLeads = async (req, res) => {
 
     for (const lead of leads) {
       try {
-        // Skip if no name or website
         if (!lead.name && !lead.website) {
           errors.push({ lead, error: 'No name or website' });
           continue;
         }
 
-        // Create a unique placeId
         const placeId = `${lead.platform || 'social'}_${lead.website || lead.sourceUrl || Date.now()}`;
 
-        // Check if lead already exists by website or email
         const existing = await Lead.findOne({
           $or: [
             { website: lead.website },
@@ -34,7 +61,7 @@ export const saveBulkLeads = async (req, res) => {
             name: lead.name || 'Unknown Business',
             phone: lead.phone || '',
             email: lead.email || '',
-            website: lead.website || '',  // ✅ FIXED: was "leadsController.js"
+            website: lead.website || '',
             address: lead.address || '',
             rating: parseFloat(lead.rating) || 0,
             placeId: placeId,
