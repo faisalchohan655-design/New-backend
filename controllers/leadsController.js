@@ -20,23 +20,23 @@ export const deleteLead = async (req, res) => {
   }
 };
 
+// ✅ ALWAYS SAVE – NO DUPLICATE CHECK
 export const saveBulkLeads = async (req, res) => {
   try {
     const { leads } = req.body;
-    console.log('📦 Received leads:', leads?.length || 0);
+    console.log('📦 [bulk] Received leads:', leads?.length || 0);
 
     if (!leads || !leads.length) {
-      return res.status(400).json({ error: 'No leads' });
+      return res.status(400).json({ error: 'No leads to save' });
     }
 
     const saved = [];
 
     for (const lead of leads) {
       try {
-        // ✅ Generate unique placeId for each lead
+        // ✅ Generate UNIQUE placeId every time
         const placeId = `social_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-        // ✅ Always save – do NOT check for duplicates
         const newLead = new Lead({
           name: lead.name || 'Unknown Business',
           phone: lead.phone || '',
@@ -52,12 +52,13 @@ export const saveBulkLeads = async (req, res) => {
 
         await newLead.save();
         saved.push(newLead);
-        console.log(`✅ Saved: ${newLead.name}`);
+        console.log(`✅ Saved: ${newLead.name} (${newLead.placeId})`);
       } catch (err) {
         console.error('❌ Error saving lead:', err.message);
       }
     }
 
+    console.log(`📊 Summary: ${saved.length} saved`);
     res.json({ success: true, saved: saved.length, total: leads.length });
   } catch (error) {
     console.error('❌ Bulk save error:', error);
