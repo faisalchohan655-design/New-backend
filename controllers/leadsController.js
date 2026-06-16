@@ -30,19 +30,13 @@ export const saveBulkLeads = async (req, res) => {
     }
 
     const saved = [];
-    let skipped = 0;
 
     for (const lead of leads) {
       try {
+        // ✅ Generate unique placeId for each lead
         const placeId = `social_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-        const existing = await Lead.findOne({ placeId });
-
-        if (existing) {
-          skipped++;
-          continue;
-        }
-
+        // ✅ Always save – do NOT check for duplicates
         const newLead = new Lead({
           name: lead.name || 'Unknown Business',
           phone: lead.phone || '',
@@ -60,11 +54,10 @@ export const saveBulkLeads = async (req, res) => {
         saved.push(newLead);
         console.log(`✅ Saved: ${newLead.name}`);
       } catch (err) {
-        console.error('❌ Error:', err.message);
+        console.error('❌ Error saving lead:', err.message);
       }
     }
 
-    console.log(`📊 Saved: ${saved.length}, Skipped: ${skipped}`);
     res.json({ success: true, saved: saved.length, total: leads.length });
   } catch (error) {
     console.error('❌ Bulk save error:', error);
