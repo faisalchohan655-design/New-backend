@@ -47,7 +47,6 @@ export const saveBulkLeads = async (req, res) => {
           continue;
         }
 
-        // Create unique placeId from website, sourceUrl, or name
         const uniqueId = lead.website || lead.sourceUrl || lead.name || `lead_${Date.now()}`;
         const placeId = `${lead.platform || 'social'}_${uniqueId}`;
 
