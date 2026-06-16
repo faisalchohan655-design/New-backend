@@ -1,7 +1,7 @@
 import axios from 'axios';
 import Lead from '../models/Lead.js';
 
-// ---- SerpAPI Google Search (with debug logs) ----
+// ---- SerpAPI Google Search ----
 const searchWithSerpAPI = async (query, count) => {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) {
@@ -22,24 +22,22 @@ const searchWithSerpAPI = async (query, count) => {
   const response = await axios.get(url, { params });
   console.log('✅ SerpAPI response status:', response.status);
 
-  // Try to get local_results or organic_results
   const localResults = response.data.local_results?.places || [];
   const organicResults = response.data.organic_results || [];
 
   console.log(`📊 SerpAPI returned: ${localResults.length} local, ${organicResults.length} organic`);
 
-  // Use local_results first (like Google Maps), then fallback to organic
   const items = localResults.length > 0 ? localResults : organicResults;
 
-  return items.map(item => ({
+  return items.slice(0, count).map(item => ({
     name: item.title || item.name || '',
     platform: 'web',
     email: '',
     phone: '',
     website: item.website || item.link || '',
+    sourceUrl: item.link || item.website || '',
     followers: 0,
     rating: item.rating || 0,
-    sourceUrl: item.link || '',
     verified: false,
     snippet: item.snippet || item.description || ''
   }));
@@ -55,9 +53,9 @@ const generateMockResults = (platform, query, count) => {
       email: `contact${i}@${query?.replace(/\s/g, '') || 'example'}.com`,
       phone: `+92300100000${i}`,
       website: `https://www.${query?.replace(/\s/g, '') || 'example'}.com/${i}`,
+      sourceUrl: `https://www.${query?.replace(/\s/g, '') || 'example'}.com/${i}`,
       followers: Math.floor(Math.random() * 10000),
       rating: (Math.random() * 5).toFixed(1),
-      sourceUrl: `https://${platform}.com/profile/${i}`,
       verified: i % 2 === 0
     });
   }
@@ -102,43 +100,67 @@ export const socialSearch = async (req, res) => {
 export const saveSocialLeads = async (req, res) => {
   try {
     const { leads } = req.body;
-    console.log('📦 Received leads to save:', leads?.length || 0);
+    console.log('📦 [social] Received leads:', leads?.length || 0);
 
     if (!leads || !leads.length) {
       return res.status(400).json({ error: 'No leads to save' });
     }
 
     const saved = [];
+    const errors = [];
+
     for (const lead of leads) {
-      if (!lead.name && !lead.website) continue;
+      try {
+        if (!lead.name && !lead.website && !lead.sourceUrl) {
+          errors.push({ lead, error: 'No name, website, or sourceUrl' });
+          continue;
+        }
 
-      const existing = await Lead.findOne({
-        $or: [
-          { website: lead.website },
-          { email: lead.email }
-        ]
-      });
+        const uniqueId = lead.website || lead.sourceUrl || lead.name || `lead_${Date.now()}`;
+        const placeId = `${lead.platform || 'social'}_${uniqueId}`;
 
-      if (!existing) {
-        const newLead = new Lead({
-          name: lead.name || 'Unknown Business',
-          phone: lead.phone || '',
-          email: lead.email || '',
-          website: lead.website || '',
-          address: lead.address || '',
-          rating: parseFloat(lead.rating) || 0,
-          placeId: `${lead.platform || 'social'}_${lead.website || lead.sourceUrl || Date.now()}`,
-          source: lead.platform || 'social',
-          status: 'Untouched',
-          createdAt: new Date()
+        const existing = await Lead.findOne({
+          $or: [
+            { placeId: placeId },
+            { website: lead.website },
+            { email: lead.email }
+          ]
         });
-        await newLead.save();
-        saved.push(newLead);
-        console.log(`✅ Saved lead: ${newLead.name}`);
+
+        if (!existing) {
+          const newLead = new Lead({
+            name: lead.name || 'Unknown Business',
+            phone: lead.phone || '',
+            email: lead.email || '',
+            website: lead.website || '',
+            address: lead.address || '',
+            rating: parseFloat(lead.rating) || 0,
+            placeId: placeId,
+            source: lead.platform || 'social',
+            status: 'Untouched',
+            createdAt: new Date()
+          });
+          await newLead.save();
+          saved.push(newLead);
+          console.log(`✅ Saved social lead: ${newLead.name} (${newLead.placeId})`);
+        } else {
+          console.log(`⏭️ Social lead already exists: ${lead.name || lead.website}`);
+        }
+      } catch (err) {
+        console.error('❌ Error saving social lead:', err.message);
+        errors.push({ lead, error: err.message });
       }
     }
 
-    res.json({ success: true, saved: saved.length, total: leads.length });
+    console.log(`📊 Social summary: ${saved.length} saved, ${errors.length} errors`);
+
+    res.json({
+      success: true,
+      saved: saved.length,
+      total: leads.length,
+      errors: errors.length > 0 ? errors : undefined,
+      savedLeads: saved
+    });
   } catch (error) {
     console.error('❌ SaveSocialLeads error:', error);
     res.status(500).json({ error: error.message });
