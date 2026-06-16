@@ -1,16 +1,16 @@
 import express from 'express';
-import { getAllLeads, deleteLead } from '../controllers/leadsController.js';
+import { getAllLeads, deleteLead, saveBulkLeads } from '../controllers/leadsController.js';
 import Lead from '../models/Lead.js';
 
 const router = express.Router();
 
-// GET all leads – this will be mounted at /api/leads
+// GET all leads
 router.get('/', getAllLeads);
 
 // DELETE a lead
 router.delete('/:id', deleteLead);
 
-// PATCH update lead (for status, contactPerson)
+// PATCH update lead (status, contactPerson)
 router.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -22,5 +22,8 @@ router.patch('/:id', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// ✅ NEW: Bulk save leads (for Social Insights)
+router.post('/bulk', saveBulkLeads);
 
 export default router;
