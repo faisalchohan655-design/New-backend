@@ -1,100 +1,110 @@
 import axios from 'axios';
+import * as cheerio from 'cheerio';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import Lead from '../models/Lead.js';
 
-// Mock data generator (fallback)
-const generateMockResults = (platform, query, count) => {
-  const results = [];
-  for (let i = 1; i <= Math.min(count, 10); i++) {
-    results.push({
-      name: `${platform.charAt(0).toUpperCase() + platform.slice(1)} Business ${i}`,
-      platform: platform,
-      email: `contact${i}@${query?.replace(/\s/g, '') || 'example'}.com`,
-      phone: `+92300100000${i}`,
-      website: `https://www.${query?.replace(/\s/g, '') || 'example'}.com/${i}`,
-      followers: Math.floor(Math.random() * 10000),
-      rating: (Math.random() * 5).toFixed(1),
-      sourceUrl: `https://${platform}.com/profile/${i}`,
-      verified: i % 2 === 0
+// Initialize Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' }); // or 'gemini-1.5-pro'
+
+// ---- Google Custom Search (as before) ----
+const searchGoogle = async (query, count) => {
+  const apiKey = process.env.GOOGLE_API_KEY;
+  const cx = process.env.GOOGLE_CX_ID;
+  if (!apiKey || !cx) throw new Error('Google API keys missing');
+
+  const url = 'https://www.googleapis.com/customsearch/v1';
+  const params = { key: apiKey, cx, q: query, num: Math.min(count, 10) };
+  const response = await axios.get(url, { params });
+  return response.data.items || [];
+};
+
+// ---- Gemini: Extract emails & phones from a URL ----
+const extractContactsWithGemini = async (url) => {
+  try {
+    // 1. Fetch webpage content
+    const { data: html } = await axios.get(url, {
+      timeout: 8000,
+      headers: { 'User-Agent': 'LeadConnect/1.0' }
     });
+    const $ = cheerio.load(html);
+    const text = $('body').text().replace(/\s+/g, ' ').slice(0, 15000); // limit tokens
+
+    // 2. Send to Gemini
+    const prompt = `
+      Extract all email addresses and phone numbers from the following text.
+      Return ONLY a JSON object with two keys: "emails" (array) and "phones" (array).
+      If none found, return empty arrays.
+      Text: """${text}"""
+    `;
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    // Parse JSON from Gemini response (may contain markdown fences)
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { emails: [], phones: [] };
+    return JSON.parse(jsonMatch[0]);
+  } catch (err) {
+    console.error(`Gemini extraction failed for ${url}:`, err.message);
+    return { emails: [], phones: [] };
   }
-  return results;
 };
 
-// Real Reddit search (with proper encoding)
-const searchReddit = async (query, count) => {
-  // Encode query properly: replace spaces with '+'
-  const encodedQuery = encodeURIComponent(query).replace(/%20/g, '+');
-  const url = `https://www.reddit.com/search.json?q=${encodedQuery}&limit=${Math.min(count, 25)}&sort=relevance`;
-
-  const response = await axios.get(url, {
-    headers: {
-      'User-Agent': 'LeadConnect/1.0 (https://leadconnect.app)'
-    },
-    timeout: 10000
-  });
-
-  const children = response.data.data?.children || [];
-  return children.map(child => {
-    const data = child.data;
-    return {
-      name: data.author || '[deleted]',
-      platform: 'reddit',
-      email: '',
-      phone: '',
-      website: `https://reddit.com${data.permalink}`,
-      followers: data.score || 0,
-      rating: data.upvote_ratio || 0,
-      sourceUrl: `https://reddit.com${data.permalink}`,
-      verified: false,
-      snippet: data.title || data.selftext || ''
-    };
-  });
-};
-
+// ---- Main search endpoint (Google + Gemini enrichment) ----
 export const socialSearch = async (req, res) => {
   try {
     const { platform, searchType, query, count = 10 } = req.body;
     console.log('📨 Incoming search:', { platform, searchType, query, count });
 
-    if (!platform || !query) {
-      return res.status(400).json({ error: 'Platform and query required' });
+    if (!query) return res.status(400).json({ error: 'Query required' });
+
+    // Step 1: Google Search
+    let googleResults = [];
+    try {
+      googleResults = await searchGoogle(query, count);
+      console.log(`✅ Google returned ${googleResults.length} results`);
+    } catch (err) {
+      console.error('Google Search error:', err.message);
+      return res.status(500).json({ error: 'Search failed' });
     }
 
-    let results = [];
-    let usedMock = false;
-
-    if (platform === 'reddit') {
-      try {
-        results = await searchReddit(query, count);
-        console.log(`✅ Reddit returned ${results.length} real posts`);
-      } catch (err) {
-        console.error('❌ Reddit API error:', err.response?.status, err.message);
-        // Fallback to mock data
-        results = generateMockResults(platform, query, count);
-        usedMock = true;
-      }
-    } else {
-      // Other platforms still use mock (upgrade later)
-      results = generateMockResults(platform, query, count);
-      usedMock = true;
+    // Step 2: Enrich each result with Gemini (emails/phones)
+    const enrichedResults = [];
+    for (const item of googleResults) {
+      const website = item.link;
+      const contacts = await extractContactsWithGemini(website);
+      enrichedResults.push({
+        name: item.title,
+        platform: platform,
+        email: contacts.emails?.[0] || '',
+        phone: contacts.phones?.[0] || '',
+        website: website,
+        followers: 0,
+        rating: 0,
+        sourceUrl: website,
+        verified: false,
+        snippet: item.snippet || '',
+        allEmails: contacts.emails,   // optional: store all emails
+        allPhones: contacts.phones    // optional: store all phones
+      });
     }
 
-    res.json({ results, mock: usedMock });
+    res.json({ results: enrichedResults, mock: false });
   } catch (error) {
     console.error('Search error:', error);
     res.status(500).json({ error: error.message });
   }
 };
 
+// ---- Save leads to database (unchanged, but now includes emails/phones) ----
 export const saveSocialLeads = async (req, res) => {
   try {
     const { leads } = req.body;
-    if (!leads || !leads.length) {
-      return res.status(400).json({ error: 'No leads to save' });
-    }
+    if (!leads || !leads.length) return res.status(400).json({ error: 'No leads to save' });
+
     const saved = [];
     for (const lead of leads) {
-      const existing = await Lead.findOne({ email: lead.email });
+      // Skip if no website? But we want to save anyway.
+      const existing = await Lead.findOne({ website: lead.website });
       if (!existing) {
         const newLead = new Lead({
           name: lead.name,
