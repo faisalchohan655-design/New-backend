@@ -1,6 +1,50 @@
 import axios from 'axios';
 import Lead from '../models/Lead.js';
 
+// ---- SerpAPI Google Search (with debug logs) ----
+const searchWithSerpAPI = async (query, count) => {
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) {
+    console.error('❌ SERPAPI_KEY missing');
+    return [];
+  }
+
+  const url = 'https://serpapi.com/search';
+  const params = {
+    q: query,
+    api_key: apiKey,
+    num: Math.min(count, 10),
+    engine: 'google'
+  };
+
+  console.log('🌐 Calling SerpAPI with params:', params);
+
+  const response = await axios.get(url, { params });
+  console.log('✅ SerpAPI response status:', response.status);
+
+  // Try to get local_results or organic_results
+  const localResults = response.data.local_results?.places || [];
+  const organicResults = response.data.organic_results || [];
+
+  console.log(`📊 SerpAPI returned: ${localResults.length} local, ${organicResults.length} organic`);
+
+  // Use local_results first (like Google Maps), then fallback to organic
+  const items = localResults.length > 0 ? localResults : organicResults;
+
+  return items.map(item => ({
+    name: item.title || item.name || '',
+    platform: 'web',
+    email: '',
+    phone: '',
+    website: item.website || item.link || '',
+    followers: 0,
+    rating: item.rating || 0,
+    sourceUrl: item.link || '',
+    verified: false,
+    snippet: item.snippet || item.description || ''
+  }));
+};
+
 // Helper: generate mock data (fallback only)
 const generateMockResults = (platform, query, count) => {
   const results = [];
@@ -20,35 +64,6 @@ const generateMockResults = (platform, query, count) => {
   return results;
 };
 
-// ---- SerpAPI Google Search ----
-const searchWithSerpAPI = async (query, count) => {
-  const apiKey = process.env.SERPAPI_KEY;
-  if (!apiKey) throw new Error('SERPAPI_KEY missing');
-
-  const url = 'https://serpapi.com/search';
-  const params = {
-    q: query,
-    api_key: apiKey,
-    num: Math.min(count, 10),
-    engine: 'google'
-  };
-
-  const response = await axios.get(url, { params });
-  const organicResults = response.data.organic_results || [];
-  return organicResults.map(item => ({
-    name: item.title || '',
-    platform: 'web',
-    email: '',
-    phone: '',
-    website: item.link || '',
-    followers: 0,
-    rating: 0,
-    sourceUrl: item.link || '',
-    verified: false,
-    snippet: item.snippet || ''
-  }));
-};
-
 // ---- SOCIAL SEARCH ----
 export const socialSearch = async (req, res) => {
   try {
@@ -64,7 +79,12 @@ export const socialSearch = async (req, res) => {
 
     try {
       results = await searchWithSerpAPI(query, count);
-      console.log(`✅ SerpAPI returned ${results.length} results`);
+      console.log(`✅ Returning ${results.length} real results`);
+      if (results.length === 0) {
+        console.warn('⚠️ No results from SerpAPI, falling back to mock');
+        results = generateMockResults(platform, query, count);
+        usedMock = true;
+      }
     } catch (err) {
       console.error('❌ SerpAPI error:', err.message);
       results = generateMockResults(platform, query, count);
@@ -78,45 +98,28 @@ export const socialSearch = async (req, res) => {
   }
 };
 
-// ---- SAVE SOCIAL LEADS (FIXED) ----
+// ---- SAVE SOCIAL LEADS ----
 export const saveSocialLeads = async (req, res) => {
   try {
     const { leads } = req.body;
     console.log('📦 Received leads to save:', leads?.length || 0);
-    console.log('📦 First lead sample:', leads?.[0]);
 
     if (!leads || !leads.length) {
       return res.status(400).json({ error: 'No leads to save' });
     }
 
     const saved = [];
-    const errors = [];
-
     for (const lead of leads) {
-      try {
-        // Skip if no useful data
-        if (!lead.name && !lead.website) {
-          errors.push({ lead, error: 'No name or website' });
-          continue;
-        }
+      if (!lead.name && !lead.website) continue;
 
-        // Create a unique placeId
-        const placeId = `${lead.platform || 'social'}_${lead.website || lead.sourceUrl || Date.now()}`;
+      const existing = await Lead.findOne({
+        $or: [
+          { website: lead.website },
+          { email: lead.email }
+        ]
+      });
 
-        // Check for existing lead by website or email
-        const existing = await Lead.findOne({
-          $or: [
-            { website: lead.website },
-            { email: lead.email }
-          ]
-        });
-
-        if (existing) {
-          console.log(`⏭️ Lead already exists: ${lead.website || lead.email}`);
-          continue;
-        }
-
-        // Create new lead
+      if (!existing) {
         const newLead = new Lead({
           name: lead.name || 'Unknown Business',
           phone: lead.phone || '',
@@ -124,31 +127,18 @@ export const saveSocialLeads = async (req, res) => {
           website: lead.website || '',
           address: lead.address || '',
           rating: parseFloat(lead.rating) || 0,
-          placeId: placeId,
+          placeId: `${lead.platform || 'social'}_${lead.website || lead.sourceUrl || Date.now()}`,
           source: lead.platform || 'social',
           status: 'Untouched',
           createdAt: new Date()
         });
-
         await newLead.save();
         saved.push(newLead);
-        console.log(`✅ Saved lead: ${newLead.name} (${newLead.website})`);
-      } catch (err) {
-        console.error('❌ Error saving individual lead:', err.message);
-        errors.push({ lead, error: err.message });
+        console.log(`✅ Saved lead: ${newLead.name}`);
       }
     }
 
-    console.log(`📊 Summary: ${saved.length} saved, ${errors.length} errors`);
-
-    // ✅ Send back the saved leads so frontend can verify
-    res.json({
-      success: true,
-      saved: saved.length,
-      total: leads.length,
-      errors: errors.length > 0 ? errors : undefined,
-      savedLeads: saved // useful for debugging
-    });
+    res.json({ success: true, saved: saved.length, total: leads.length });
   } catch (error) {
     console.error('❌ SaveSocialLeads error:', error);
     res.status(500).json({ error: error.message });
