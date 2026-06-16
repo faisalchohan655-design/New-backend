@@ -78,11 +78,12 @@ export const socialSearch = async (req, res) => {
   }
 };
 
-// ---- SAVE SOCIAL LEADS ----
+// ---- SAVE SOCIAL LEADS (FIXED) ----
 export const saveSocialLeads = async (req, res) => {
   try {
     const { leads } = req.body;
     console.log('📦 Received leads to save:', leads?.length || 0);
+    console.log('📦 First lead sample:', leads?.[0]);
 
     if (!leads || !leads.length) {
       return res.status(400).json({ error: 'No leads to save' });
@@ -93,13 +94,16 @@ export const saveSocialLeads = async (req, res) => {
 
     for (const lead of leads) {
       try {
+        // Skip if no useful data
         if (!lead.name && !lead.website) {
           errors.push({ lead, error: 'No name or website' });
           continue;
         }
 
+        // Create a unique placeId
         const placeId = `${lead.platform || 'social'}_${lead.website || lead.sourceUrl || Date.now()}`;
 
+        // Check for existing lead by website or email
         const existing = await Lead.findOne({
           $or: [
             { website: lead.website },
@@ -112,6 +116,7 @@ export const saveSocialLeads = async (req, res) => {
           continue;
         }
 
+        // Create new lead
         const newLead = new Lead({
           name: lead.name || 'Unknown Business',
           phone: lead.phone || '',
@@ -136,11 +141,13 @@ export const saveSocialLeads = async (req, res) => {
 
     console.log(`📊 Summary: ${saved.length} saved, ${errors.length} errors`);
 
+    // ✅ Send back the saved leads so frontend can verify
     res.json({
       success: true,
       saved: saved.length,
       total: leads.length,
-      errors: errors.length > 0 ? errors : undefined
+      errors: errors.length > 0 ? errors : undefined,
+      savedLeads: saved // useful for debugging
     });
   } catch (error) {
     console.error('❌ SaveSocialLeads error:', error);
