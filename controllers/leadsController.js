@@ -1,55 +1,70 @@
-import Lead from '../models/Lead.js';
-
-export const getAllLeads = async (req, res) => {
-  try {
-    const leads = await Lead.find().sort({ createdAt: -1 });
-    res.status(200).json(leads);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-export const deleteLead = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const deleted = await Lead.findByIdAndDelete(id);
-    if (!deleted) return res.status(404).json({ error: 'Lead not found' });
-    res.status(200).json({ message: 'Lead deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
 export const saveBulkLeads = async (req, res) => {
   try {
     const { leads } = req.body;
+    console.log('📦 [bulk] Received leads:', leads?.length || 0);
+
     if (!leads || !leads.length) {
       return res.status(400).json({ error: 'No leads to save' });
     }
+
     const saved = [];
+    const errors = [];
+
     for (const lead of leads) {
-      const existing = await Lead.findOne({
-        $or: [{ email: lead.email }, { website: lead.website }]
-      });
-      if (!existing) {
-        const newLead = new Lead({
-          name: lead.name,
-          phone: lead.phone || '',
-          email: lead.email || '',
-          website: lead.website || '',
-          address: lead.address || '',
-          rating: parseFloat(lead.rating) || 0,
-          placeId: `${lead.platform || 'social'}_${lead.sourceUrl || Date.now()}`,
-          source: lead.platform || 'social',
-          status: 'Untouched',
-          createdAt: new Date()
+      try {
+        // Skip if no name or website
+        if (!lead.name && !lead.website) {
+          errors.push({ lead, error: 'No name or website' });
+          continue;
+        }
+
+        // Create a unique placeId
+        const placeId = `${lead.platform || 'social'}_${lead.website || lead.sourceUrl || Date.now()}`;
+
+        // Check if lead already exists by website or email
+        const existing = await Lead.findOne({
+          $or: [
+            { website: lead.website },
+            { email: lead.email }
+          ]
         });
-        await newLead.save();
-        saved.push(newLead);
+
+        if (!existing) {
+          const newLead = new Lead({
+            name: lead.name || 'Unknown Business',
+            phone: lead.phone || '',
+            email: lead.email || '',
+            website: lead.website || '',
+            address: lead.address || '',
+            rating: parseFloat(lead.rating) || 0,
+            placeId: placeId,
+            source: lead.platform || 'social',
+            status: 'Untouched',
+            createdAt: new Date()
+          });
+          await newLead.save();
+          saved.push(newLead);
+          console.log(`✅ Saved lead: ${newLead.name}`);
+        } else {
+          console.log(`⏭️ Lead already exists: ${lead.website || lead.email}`);
+        }
+      } catch (err) {
+        console.error('❌ Error saving lead:', err.message);
+        errors.push({ lead, error: err.message });
       }
     }
-    res.json({ success: true, saved: saved.length, total: leads.length });
+
+    console.log(`📊 Summary: ${saved.length} saved, ${errors.length} errors`);
+
+    res.json({
+      success: true,
+      saved: saved.length,
+      total: leads.length,
+      errors: errors.length > 0 ? errors : undefined,
+      savedLeads: saved // return saved leads for debugging
+    });
   } catch (error) {
+    console.error('❌ Bulk save error:', error);
     res.status(500).json({ error: error.message });
   }
 };
