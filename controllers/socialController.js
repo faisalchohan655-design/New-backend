@@ -1,13 +1,9 @@
 import axios from 'axios';
 import Lead from '../models/Lead.js';
 
-// ---- SerpAPI Google Search ----
 const searchWithSerpAPI = async (query, count) => {
   const apiKey = process.env.SERPAPI_KEY;
-  if (!apiKey) {
-    console.error('❌ SERPAPI_KEY missing');
-    return [];
-  }
+  if (!apiKey) return [];
 
   const url = 'https://serpapi.com/search';
   const params = {
@@ -17,20 +13,11 @@ const searchWithSerpAPI = async (query, count) => {
     engine: 'google'
   };
 
-  console.log('🌐 Calling SerpAPI with params:', params);
-
   const response = await axios.get(url, { params });
-  console.log('✅ SerpAPI response status:', response.status);
-
   const localResults = response.data.local_results?.places || [];
-  const organicResults = response.data.organic_results || [];
 
-  console.log(`📊 SerpAPI returned: ${localResults.length} local, ${organicResults.length} organic`);
-
-  const items = localResults.length > 0 ? localResults : organicResults;
-
-  return items.slice(0, count).map(item => ({
-    name: item.title || item.name || '',
+  return localResults.map(item => ({
+    name: item.title || item.name || 'Unknown Business',
     platform: 'web',
     email: '',
     phone: '',
@@ -43,7 +30,6 @@ const searchWithSerpAPI = async (query, count) => {
   }));
 };
 
-// Helper: generate mock data (fallback only)
 const generateMockResults = (platform, query, count) => {
   const results = [];
   for (let i = 1; i <= Math.min(count, 10); i++) {
@@ -62,7 +48,6 @@ const generateMockResults = (platform, query, count) => {
   return results;
 };
 
-// ---- SOCIAL SEARCH ----
 export const socialSearch = async (req, res) => {
   try {
     const { platform, searchType, query, count = 10 } = req.body;
@@ -77,9 +62,8 @@ export const socialSearch = async (req, res) => {
 
     try {
       results = await searchWithSerpAPI(query, count);
-      console.log(`✅ Returning ${results.length} real results`);
+      console.log(`✅ Returning ${results.length} results`);
       if (results.length === 0) {
-        console.warn('⚠️ No results from SerpAPI, falling back to mock');
         results = generateMockResults(platform, query, count);
         usedMock = true;
       }
@@ -96,7 +80,6 @@ export const socialSearch = async (req, res) => {
   }
 };
 
-// ---- SAVE SOCIAL LEADS ----
 export const saveSocialLeads = async (req, res) => {
   try {
     const { leads } = req.body;
@@ -111,8 +94,8 @@ export const saveSocialLeads = async (req, res) => {
 
     for (const lead of leads) {
       try {
-        if (!lead.name && !lead.website && !lead.sourceUrl) {
-          errors.push({ lead, error: 'No name, website, or sourceUrl' });
+        if (!lead.name && !lead.website) {
+          errors.push({ lead, error: 'No name or website' });
           continue;
         }
 
@@ -142,7 +125,7 @@ export const saveSocialLeads = async (req, res) => {
           });
           await newLead.save();
           saved.push(newLead);
-          console.log(`✅ Saved social lead: ${newLead.name} (${newLead.placeId})`);
+          console.log(`✅ Saved social lead: ${newLead.name}`);
         } else {
           console.log(`⏭️ Social lead already exists: ${lead.name || lead.website}`);
         }
