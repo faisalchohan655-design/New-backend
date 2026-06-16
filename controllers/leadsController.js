@@ -1,5 +1,6 @@
 import Lead from '../models/Lead.js';
 
+// GET all leads
 export const getAllLeads = async (req, res) => {
   try {
     const leads = await Lead.find().sort({ createdAt: -1 });
@@ -11,6 +12,7 @@ export const getAllLeads = async (req, res) => {
   }
 };
 
+// DELETE a single lead
 export const deleteLead = async (req, res) => {
   try {
     const { id } = req.params;
@@ -25,7 +27,7 @@ export const deleteLead = async (req, res) => {
   }
 };
 
-// NEW: Bulk save leads (for Social Insights)
+// BULK SAVE leads (for Social Insights / any bulk import)
 export const saveBulkLeads = async (req, res) => {
   try {
     const { leads } = req.body;
@@ -35,12 +37,12 @@ export const saveBulkLeads = async (req, res) => {
 
     const saved = [];
     for (const lead of leads) {
-      // Check if lead already exists (by email or website)
-      const existing = await Lead.findOne({ 
+      // Avoid duplicates by checking email or website
+      const existing = await Lead.findOne({
         $or: [
           { email: lead.email },
           { website: lead.website }
-        ] 
+        ]
       });
       if (!existing) {
         const newLead = new Lead({
@@ -50,7 +52,7 @@ export const saveBulkLeads = async (req, res) => {
           website: lead.website || '',
           address: lead.address || '',
           rating: parseFloat(lead.rating) || 0,
-          placeId: `${lead.platform}_${lead.sourceUrl || Date.now()}`,
+          placeId: `${lead.platform || 'social'}_${lead.sourceUrl || Date.now()}`,
           source: lead.platform || 'social',
           status: 'Untouched',
           createdAt: new Date()
@@ -59,7 +61,7 @@ export const saveBulkLeads = async (req, res) => {
         saved.push(newLead);
       }
     }
-    res.json({ success: true, saved: saved.length, total: leads.length });
+    res.status(200).json({ success: true, saved: saved.length, total: leads.length });
   } catch (error) {
     console.error('Bulk save error:', error);
     res.status(500).json({ error: error.message });
