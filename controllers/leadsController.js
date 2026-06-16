@@ -20,11 +20,11 @@ export const deleteLead = async (req, res) => {
   }
 };
 
-// ✅ ALWAYS SAVE – NO DUPLICATE CHECK
+// ✅ THIS IS THE ONLY FUNCTION THAT NEEDS TO CHANGE
 export const saveBulkLeads = async (req, res) => {
   try {
     const { leads } = req.body;
-    console.log('📦 [bulk] Received leads:', leads?.length || 0);
+    console.log('📦 Received leads:', leads?.length || 0);
 
     if (!leads || !leads.length) {
       return res.status(400).json({ error: 'No leads to save' });
@@ -34,7 +34,7 @@ export const saveBulkLeads = async (req, res) => {
 
     for (const lead of leads) {
       try {
-        // ✅ Generate UNIQUE placeId every time
+        // ✅ ALWAYS generate a NEW unique ID – NEVER check duplicates
         const placeId = `social_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
         const newLead = new Lead({
@@ -52,7 +52,7 @@ export const saveBulkLeads = async (req, res) => {
 
         await newLead.save();
         saved.push(newLead);
-        console.log(`✅ Saved: ${newLead.name} (${newLead.placeId})`);
+        console.log(`✅ Saved: ${newLead.name}`);
       } catch (err) {
         console.error('❌ Error saving lead:', err.message);
       }
