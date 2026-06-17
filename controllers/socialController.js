@@ -18,11 +18,11 @@ const searchWithSerpAPI = async (query, count) => {
   try {
     const response = await axios.get(url, { params });
     
-    // ✅ ONLY use local_results (business listings with contact info)
+    // ✅ ONLY local_results – business listings with contact info
     const localResults = response.data.local_results?.places || [];
 
     if (localResults.length === 0) {
-      console.log('⚠️ No local business results found');
+      console.log('⚠️ No local results found');
       return [];
     }
 
@@ -56,6 +56,7 @@ export const socialSearch = async (req, res) => {
     const results = await searchWithSerpAPI(query, count);
     console.log(`✅ Returning ${results.length} real results`);
 
+    // ✅ Send empty array if no results – NO MOCK DATA
     res.json({ results });
   } catch (error) {
     console.error('Search error:', error);
