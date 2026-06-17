@@ -1,14 +1,13 @@
 import axios from 'axios';
-import cheerio from 'cheerio';
 import dns from 'dns';
 import { promisify } from 'util';
 
 const resolveMx = promisify(dns.resolveMx);
 
-// ✅ Improved Email Regex – better coverage
+// Improved Email Regex
 const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
-// ✅ Improved Phone Regex – handles Pakistan & international formats
+// Improved Phone Regex
 const phoneRegex = /(?:\+?92|0)?[3-9][0-9]{9,14}|(?:\+?[1-9][0-9]{1,3})?[0-9]{7,15}/g;
 
 // Generic domains to skip
@@ -19,9 +18,7 @@ function extractEmails(text) {
   return [...new Set(matches)].filter(email => {
     const local = email.split('@')[0].toLowerCase();
     const domain = email.split('@')[1]?.toLowerCase() || '';
-    // Skip generic emails
     if (genericDomains.includes(local)) return false;
-    // Skip if domain is too short or invalid
     if (domain.length < 4 || !domain.includes('.')) return false;
     return true;
   });
@@ -33,9 +30,7 @@ function extractPhones(text) {
     .map(p => p.trim())
     .filter(p => {
       const cleaned = p.replace(/[^0-9+]/g, '');
-      // Skip if too short or too long
       if (cleaned.length < 7 || cleaned.length > 15) return false;
-      // Skip if all digits are same
       if (/^(\d)\1+$/.test(cleaned)) return false;
       return true;
     });
@@ -49,14 +44,20 @@ export async function verifyEmail(email) {
   } catch { return false; }
 }
 
+// ✅ DYNAMIC IMPORT for cheerio – avoids module not found errors
+async function loadCheerio() {
+  const module = await import('cheerio');
+  return module.default || module;
+}
+
 async function scrapePage(url) {
   try {
     const res = await axios.get(url, {
       timeout: 10000,
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
     });
+    const cheerio = await loadCheerio();
     const $ = cheerio.load(res.data);
-    // Remove script and style tags to reduce noise
     $('script, style, noscript, meta, link').remove();
     const text = $('body').text().replace(/\s+/g, ' ');
     const emails = extractEmails(text);
@@ -95,6 +96,7 @@ export async function extractEmailsFromUrl(startUrl, deep = false, maxPages = 10
     
     if (deep && processed < maxPages) {
       try {
+        const cheerio = await loadCheerio();
         const $ = cheerio.load((await axios.get(current)).data);
         $('a[href^="/"]').each((_, el) => {
           let href = $(el).attr('href');
