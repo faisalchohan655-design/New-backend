@@ -1,28 +1,44 @@
-// Use dynamic import for cheerio to avoid top‑level module resolution errors
-let cheerio;
-const loadCheerio = async () => {
-  if (!cheerio) {
-    const module = await import('cheerio');
-    cheerio = module.default || module;
-  }
-  return cheerio;
-};
-
 import axios from 'axios';
+import cheerio from 'cheerio';
 import dns from 'dns';
 import { promisify } from 'util';
 
 const resolveMx = promisify(dns.resolveMx);
 
+// ✅ Improved Email Regex – better coverage
 const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-const genericDomains = ['noreply', 'admin', 'webmaster', 'support', 'info', 'contact'];
+
+// ✅ Improved Phone Regex – handles Pakistan & international formats
+const phoneRegex = /(?:\+?92|0)?[3-9][0-9]{9,14}|(?:\+?[1-9][0-9]{1,3})?[0-9]{7,15}/g;
+
+// Generic domains to skip
+const genericDomains = ['noreply', 'admin', 'webmaster', 'support', 'info', 'contact', 'test', 'demo'];
 
 function extractEmails(text) {
   const matches = text.match(emailRegex) || [];
   return [...new Set(matches)].filter(email => {
     const local = email.split('@')[0].toLowerCase();
-    return !genericDomains.includes(local);
+    const domain = email.split('@')[1]?.toLowerCase() || '';
+    // Skip generic emails
+    if (genericDomains.includes(local)) return false;
+    // Skip if domain is too short or invalid
+    if (domain.length < 4 || !domain.includes('.')) return false;
+    return true;
   });
+}
+
+function extractPhones(text) {
+  const matches = text.match(phoneRegex) || [];
+  return [...new Set(matches)]
+    .map(p => p.trim())
+    .filter(p => {
+      const cleaned = p.replace(/[^0-9+]/g, '');
+      // Skip if too short or too long
+      if (cleaned.length < 7 || cleaned.length > 15) return false;
+      // Skip if all digits are same
+      if (/^(\d)\1+$/.test(cleaned)) return false;
+      return true;
+    });
 }
 
 export async function verifyEmail(email) {
@@ -35,12 +51,16 @@ export async function verifyEmail(email) {
 
 async function scrapePage(url) {
   try {
-    const res = await axios.get(url, { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } });
-    const $ = await (await loadCheerio()).load(res.data);
-    const text = $('body').text();
+    const res = await axios.get(url, {
+      timeout: 10000,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+    });
+    const $ = cheerio.load(res.data);
+    // Remove script and style tags to reduce noise
+    $('script, style, noscript, meta, link').remove();
+    const text = $('body').text().replace(/\s+/g, ' ');
     const emails = extractEmails(text);
-    const phoneRegex = /(?:\+?92|0)?[0-9]{10,14}/g;
-    const phones = [...new Set(text.match(phoneRegex) || [])];
+    const phones = extractPhones(text);
     return { emails, phones };
   } catch (error) {
     console.error(`Scrape error ${url}:`, error.message);
@@ -53,21 +73,29 @@ export async function extractEmailsFromUrl(startUrl, deep = false, maxPages = 10
   const visited = new Set();
   const queue = [startUrl];
   let processed = 0;
+
   while (queue.length && processed < maxPages) {
     const current = queue.shift();
     if (visited.has(current)) continue;
     visited.add(current);
     processed++;
     const { emails, phones } = await scrapePage(current);
-    for (let i = 0; i < emails.length; i++) {
-      if (!results.has(emails[i])) {
-        const verified = await verifyEmail(emails[i]);
-        results.set(emails[i], { email: emails[i], source: current, verified, phone: phones[i] || '' });
+    
+    for (const email of emails) {
+      if (!results.has(email)) {
+        const verified = await verifyEmail(email);
+        results.set(email, { 
+          email, 
+          source: current, 
+          verified, 
+          phone: phones.length > 0 ? phones[0] : '' 
+        });
       }
     }
+    
     if (deep && processed < maxPages) {
       try {
-        const $ = await (await loadCheerio()).load((await axios.get(current)).data);
+        const $ = cheerio.load((await axios.get(current)).data);
         $('a[href^="/"]').each((_, el) => {
           let href = $(el).attr('href');
           if (href && !href.startsWith('http')) href = new URL(href, current).href;
