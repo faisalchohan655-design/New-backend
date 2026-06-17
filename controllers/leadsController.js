@@ -20,7 +20,6 @@ export const deleteLead = async (req, res) => {
   }
 };
 
-// ✅ THIS IS THE ONLY FUNCTION THAT NEEDS TO CHANGE
 export const saveBulkLeads = async (req, res) => {
   try {
     const { leads } = req.body;
@@ -34,7 +33,6 @@ export const saveBulkLeads = async (req, res) => {
 
     for (const lead of leads) {
       try {
-        // ✅ ALWAYS generate a NEW unique ID – NEVER check duplicates
         const placeId = `social_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
         const newLead = new Lead({
