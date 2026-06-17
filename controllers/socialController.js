@@ -18,7 +18,7 @@ const searchWithSerpAPI = async (query, count) => {
   try {
     const response = await axios.get(url, { params });
     
-    // ✅ ONLY local_results – business listings with contact info
+    // ✅ SAME as Local Business Insights – uses local_results
     const localResults = response.data.local_results?.places || [];
 
     if (localResults.length === 0) {
@@ -36,7 +36,8 @@ const searchWithSerpAPI = async (query, count) => {
       followers: 0,
       rating: item.rating || 0,
       verified: false,
-      snippet: item.snippet || item.description || ''
+      snippet: item.snippet || item.description || '',
+      address: item.address || ''
     }));
   } catch (error) {
     console.error('❌ SerpAPI error:', error.message);
@@ -56,7 +57,7 @@ export const socialSearch = async (req, res) => {
     const results = await searchWithSerpAPI(query, count);
     console.log(`✅ Returning ${results.length} real results`);
 
-    // ✅ Send empty array if no results – NO MOCK DATA
+    // ✅ NO MOCK DATA – returns empty array if no results
     res.json({ results });
   } catch (error) {
     console.error('Search error:', error);
