@@ -14,8 +14,7 @@
     "axios": "^1.6.2",
     "cheerio": "^1.0.0-rc.12",
     "nodemailer": "^6.9.7",
-    "node-mailjet": "^6.0.5",
-    "@google/generative-ai": "^0.21.0"
+    "node-mailjet": "^6.0.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
