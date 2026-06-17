@@ -17,9 +17,15 @@ const searchWithSerpAPI = async (query, count) => {
 
   try {
     const response = await axios.get(url, { params });
+    
+    // ✅ ONLY use local_results (business listings with contact info)
     const localResults = response.data.local_results?.places || [];
 
-    // ✅ ONLY return local business results
+    if (localResults.length === 0) {
+      console.log('⚠️ No local business results found');
+      return [];
+    }
+
     return localResults.map(item => ({
       name: item.title || item.name || 'Unknown Business',
       platform: 'web',
@@ -48,9 +54,8 @@ export const socialSearch = async (req, res) => {
     }
 
     const results = await searchWithSerpAPI(query, count);
-    console.log(`✅ Returning ${results.length} results`);
+    console.log(`✅ Returning ${results.length} real results`);
 
-    // ✅ If no results, return empty array (no mock data)
     res.json({ results });
   } catch (error) {
     console.error('Search error:', error);
