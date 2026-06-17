@@ -19,7 +19,7 @@ const searchWithSerpAPI = async (query, count) => {
     const response = await axios.get(url, { params });
     const localResults = response.data.local_results?.places || [];
 
-    // ✅ Return EMPTY array if no local results – NO MOCK DATA
+    // ✅ ONLY return local business results
     return localResults.map(item => ({
       name: item.title || item.name || 'Unknown Business',
       platform: 'web',
@@ -50,6 +50,7 @@ export const socialSearch = async (req, res) => {
     const results = await searchWithSerpAPI(query, count);
     console.log(`✅ Returning ${results.length} results`);
 
+    // ✅ If no results, return empty array (no mock data)
     res.json({ results });
   } catch (error) {
     console.error('Search error:', error);
