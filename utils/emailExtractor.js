@@ -1,5 +1,5 @@
 import axios from 'axios';
-import cheerio from 'cheerio';
+import * as cheerio from 'cheerio';
 import dns from 'dns';
 import { promisify } from 'util';
 
@@ -96,7 +96,6 @@ export async function extractEmailsFromUrl(startUrl, deep = false, maxPages = 20
   const queue = [startUrl];
   let processed = 0;
 
-  // Add priority pages to queue first
   if (deep) {
     const baseUrl = new URL(startUrl).origin;
     for (const path of priorityPaths) {
