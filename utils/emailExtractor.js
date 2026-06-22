@@ -1,14 +1,21 @@
 import axios from 'axios';
+import cheerio from 'cheerio';
 import dns from 'dns';
 import { promisify } from 'util';
 
 const resolveMx = promisify(dns.resolveMx);
 
-// Improved Email Regex
-const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+// ✅ Better email regex
+const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
 
-// Improved Phone Regex
-const phoneRegex = /(?:\+?92|0)?[3-9][0-9]{9,14}|(?:\+?[1-9][0-9]{1,3})?[0-9]{7,15}/g;
+// ✅ Phone regex (international)
+const phoneRegex = /(?:\+?[0-9]{1,3})?[-.\s]?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}/g;
+
+// ✅ Social links regex
+const socialRegex = /(?:https?:\/\/)?(?:www\.)?(?:facebook|linkedin|twitter|instagram|youtube)\.com\/[A-Za-z0-9._/-]+/g;
+
+// Priority pages
+const priorityPaths = ['/contact', '/about', '/team', '/contact-us', '/about-us', '/our-team', '/support'];
 
 // Generic domains to skip
 const genericDomains = ['noreply', 'admin', 'webmaster', 'support', 'info', 'contact', 'test', 'demo'];
@@ -36,6 +43,11 @@ function extractPhones(text) {
     });
 }
 
+function extractSocialLinks(text) {
+  const matches = text.match(socialRegex) || [];
+  return [...new Set(matches)];
+}
+
 export async function verifyEmail(email) {
   const domain = email.split('@')[1];
   try {
@@ -44,67 +56,85 @@ export async function verifyEmail(email) {
   } catch { return false; }
 }
 
-// ✅ DYNAMIC IMPORT for cheerio – avoids module not found errors
-async function loadCheerio() {
-  const module = await import('cheerio');
-  return module.default || module;
-}
-
-async function scrapePage(url) {
+async function scrapePage(url, baseUrl) {
   try {
     const res = await axios.get(url, {
-      timeout: 10000,
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+      timeout: 15000,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
     });
-    const cheerio = await loadCheerio();
     const $ = cheerio.load(res.data);
     $('script, style, noscript, meta, link').remove();
     const text = $('body').text().replace(/\s+/g, ' ');
     const emails = extractEmails(text);
     const phones = extractPhones(text);
-    return { emails, phones };
+    const socialLinks = extractSocialLinks(text);
+    return { emails, phones, socialLinks };
   } catch (error) {
     console.error(`Scrape error ${url}:`, error.message);
-    return { emails: [], phones: [] };
+    return { emails: [], phones: [], socialLinks: [] };
   }
 }
 
-export async function extractEmailsFromUrl(startUrl, deep = false, maxPages = 10) {
+function getAllLinks($, baseUrl) {
+  const links = [];
+  $('a[href]').each((_, el) => {
+    let href = $(el).attr('href');
+    if (!href) return;
+    if (!href.startsWith('http')) {
+      try { href = new URL(href, baseUrl).href; } catch { return; }
+    }
+    if (href.includes(new URL(baseUrl).hostname) && !href.includes('#')) {
+      links.push(href);
+    }
+  });
+  return [...new Set(links)];
+}
+
+export async function extractEmailsFromUrl(startUrl, deep = false, maxPages = 20) {
   const results = new Map();
   const visited = new Set();
   const queue = [startUrl];
   let processed = 0;
+
+  // Add priority pages to queue first
+  if (deep) {
+    const baseUrl = new URL(startUrl).origin;
+    for (const path of priorityPaths) {
+      const url = baseUrl + path;
+      if (!visited.has(url)) {
+        queue.unshift(url);
+      }
+    }
+  }
 
   while (queue.length && processed < maxPages) {
     const current = queue.shift();
     if (visited.has(current)) continue;
     visited.add(current);
     processed++;
-    const { emails, phones } = await scrapePage(current);
+    const { emails, phones, socialLinks } = await scrapePage(current, startUrl);
     
     for (const email of emails) {
       if (!results.has(email)) {
         const verified = await verifyEmail(email);
-        results.set(email, { 
-          email, 
-          source: current, 
-          verified, 
-          phone: phones.length > 0 ? phones[0] : '' 
+        results.set(email, {
+          email,
+          source: current,
+          verified,
+          phone: phones.length > 0 ? phones[0] : '',
+          socialLinks: socialLinks
         });
       }
     }
     
     if (deep && processed < maxPages) {
       try {
-        const cheerio = await loadCheerio();
-        const $ = cheerio.load((await axios.get(current)).data);
-        $('a[href^="/"]').each((_, el) => {
-          let href = $(el).attr('href');
-          if (href && !href.startsWith('http')) href = new URL(href, current).href;
-          if (href && !visited.has(href) && href.includes(new URL(startUrl).hostname)) {
-            queue.push(href);
-          }
-        });
+        const res = await axios.get(current, { timeout: 10000 });
+        const $ = cheerio.load(res.data);
+        const links = getAllLinks($, current);
+        for (const link of links) {
+          if (!visited.has(link)) queue.push(link);
+        }
       } catch(e) {}
     }
   }
