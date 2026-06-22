@@ -1,7 +1,5 @@
 import Reply from '../models/Reply.js';
-import Lead from '../models/Lead.js';
 
-// Get all replies
 export const getAllReplies = async (req, res) => {
   try {
     const replies = await Reply.find().sort({ createdAt: -1 }).limit(50);
@@ -11,7 +9,6 @@ export const getAllReplies = async (req, res) => {
   }
 };
 
-// Get replies for a specific lead
 export const getRepliesByLead = async (req, res) => {
   try {
     const { leadId } = req.params;
@@ -22,7 +19,6 @@ export const getRepliesByLead = async (req, res) => {
   }
 };
 
-// Create a new reply (webhook)
 export const createReply = async (req, res) => {
   try {
     const { from, to, subject, message, html, leadId } = req.body;
@@ -34,7 +30,6 @@ export const createReply = async (req, res) => {
   }
 };
 
-// Mark reply as read
 export const markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
