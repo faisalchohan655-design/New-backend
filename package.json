@@ -1,5 +1,5 @@
 {
-  "name": "leadstriker-backend",
+  "name": "leadconnect-backend",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
@@ -14,7 +14,9 @@
     "axios": "^1.6.2",
     "cheerio": "^1.0.0-rc.12",
     "nodemailer": "^6.9.7",
-    "node-mailjet": "^6.0.5"
+    "node-mailjet": "^6.0.5",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
