@@ -1,7 +1,13 @@
+// backend/routes/social.js
 import express from 'express';
-import { socialSearch } from '../controllers/socialController.js';
+import { searchSocial, saveSocialLeads } from '../controllers/socialController.js';
 
 const router = express.Router();
-router.post('/search', socialSearch);
+
+// ✅ Search social media
+router.post('/search', searchSocial);
+
+// ✅ Save leads
+router.post('/save', saveSocialLeads);
 
 export default router;
