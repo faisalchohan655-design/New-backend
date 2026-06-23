@@ -1,156 +1,30 @@
-// backend/controllers/emailController.js - Updated extract function
-
-import axios from 'axios';
-import * as cheerio from 'cheerio';
-
-// ============================================
-// ✅ EXTRACT SOCIAL LINKS FROM WEBSITE
-// ============================================
-const extractSocialLinks = (html, baseUrl) => {
-  const $ = cheerio.load(html);
-  const socialLinks = [];
-  
-  // Social media patterns
-  const socialPatterns = [
-    /facebook\.com\//,
-    /linkedin\.com\//,
-    /instagram\.com\//,
-    /twitter\.com\//,
-    /x\.com\//,
-    /github\.com\//,
-    /youtube\.com\//,
-    /pinterest\.com\//,
-    /tiktok\.com\//
-  ];
-
-  // Search all links
-  $('a[href]').each((i, el) => {
-    const href = $(el).attr('href');
-    if (!href) return;
-    
-    // Convert relative to absolute
-    let absoluteUrl = href;
-    if (href.startsWith('/')) {
-      absoluteUrl = new URL(href, baseUrl).href;
-    }
-    
-    // Check if it's a social link
-    for (const pattern of socialPatterns) {
-      if (pattern.test(absoluteUrl)) {
-        socialLinks.push(absoluteUrl);
-        break;
-      }
-    }
-  });
-
-  return [...new Set(socialLinks)]; // Remove duplicates
-};
+// backend/controllers/emailController.js
+import { extractEmailsFromUrl } from '../utils/emailExtractor.js';
+import Lead from '../models/Lead.js';
+import nodemailer from 'nodemailer';
 
 // ============================================
-// ✅ EXTRACT EMAILS & PHONES FROM SOCIAL PAGES
+// ✅ EMAIL TRANSPORTER
 // ============================================
-const extractFromSocialPage = async (socialUrl) => {
-  try {
-    const response = await axios.get(socialUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      },
-      timeout: 10000
-    });
-    
-    const $ = cheerio.load(response.data);
-    const emails = [];
-    const phones = [];
-    
-    // Email regex
-    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-    
-    // Phone regex (international)
-    const phoneRegex = /(\+?\d{1,3}[-.]?)?\(?\d{3}\)?[-.]?\d{3}[-.]?\d{4}/g;
-    
-    // Search in text
-    const text = $('body').text();
-    
-    // Extract emails
-    const foundEmails = text.match(emailRegex) || [];
-    for (const email of foundEmails) {
-      if (!email.includes('example') && !email.includes('test')) {
-        emails.push(email);
-      }
-    }
-    
-    // Extract phones
-    const foundPhones = text.match(phoneRegex) || [];
-    for (const phone of foundPhones) {
-      if (phone.length >= 10) {
-        phones.push(phone);
-      }
-    }
-    
-    return { emails: [...new Set(emails)], phones: [...new Set(phones)] };
-  } catch (error) {
-    console.error(`Error extracting from ${socialUrl}:`, error.message);
-    return { emails: [], phones: [] };
+const transporter = nodemailer.createTransporter({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT) || 587,
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
   }
-};
+});
 
 // ============================================
-// ✅ UPDATED EXTRACT FUNCTION
+// ✅ EXTRACT EMAILS FROM URL
 // ============================================
 export const extractEmails = async (req, res) => {
   try {
     const { url, deep = false, maxPages = 10, extractSocial = true } = req.body;
     if (!url) return res.status(400).json({ error: 'URL required' });
-    
-    const allLeads = [];
-    const visitedUrls = new Set();
-    
-    // Step 1: Extract from main URL
-    const mainResult = await extractFromUrl(url, deep, maxPages);
-    allLeads.push(...mainResult);
-    
-    // Step 2: Extract from social links
-    if (extractSocial) {
-      const socialLinks = await getSocialLinks(url);
-      
-      for (const socialUrl of socialLinks) {
-        if (visitedUrls.has(socialUrl)) continue;
-        visitedUrls.add(socialUrl);
-        
-        try {
-          const socialData = await extractFromSocialPage(socialUrl);
-          
-          for (const email of socialData.emails) {
-            allLeads.push({
-              email,
-              phone: socialData.phones[0] || '',
-              source: socialUrl,
-              socialSource: 'social',
-              socialLinks: socialLinks,
-              verified: true,
-              website: url
-            });
-          }
-        } catch (error) {
-          console.error(`Error extracting from ${socialUrl}:`, error);
-        }
-      }
-    }
-    
-    // Remove duplicates
-    const unique = new Map();
-    for (const lead of allLeads) {
-      if (!unique.has(lead.email)) {
-        unique.set(lead.email, lead);
-      }
-    }
-    
-    res.json({ 
-      success: true, 
-      count: unique.size, 
-      leads: Array.from(unique.values()),
-      socialLinksFound: extractSocial ? await getSocialLinks(url) : []
-    });
+    const leads = await extractEmailsFromUrl(url, deep, maxPages);
+    res.json({ success: true, count: leads.length, leads });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -158,20 +32,134 @@ export const extractEmails = async (req, res) => {
 };
 
 // ============================================
-// ✅ GET SOCIAL LINKS FROM WEBSITE
+// ✅ BULK EXTRACT EMAILS
 // ============================================
-const getSocialLinks = async (url) => {
+export const bulkExtractEmails = async (req, res) => {
   try {
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      },
-      timeout: 10000
-    });
-    
-    return extractSocialLinks(response.data, url);
+    const { urls, deep = false, maxPagesPerUrl = 5 } = req.body;
+    if (!urls || !urls.length) return res.status(400).json({ error: 'URLs required' });
+    let allLeads = [];
+    for (const url of urls.slice(0, 20)) {
+      const leads = await extractEmailsFromUrl(url, deep, maxPagesPerUrl);
+      allLeads.push(...leads);
+    }
+    const unique = new Map();
+    for (const lead of allLeads) unique.set(lead.email, lead);
+    res.json({ success: true, count: unique.size, leads: Array.from(unique.values()) });
   } catch (error) {
-    console.error('Error getting social links:', error);
-    return [];
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// ============================================
+// ✅ SAVE EXTRACTED LEADS
+// ============================================
+export const saveExtractedLeads = async (req, res) => {
+  try {
+    const { leads } = req.body;
+    const saved = [];
+    for (const lead of leads) {
+      const existing = await Lead.findOne({ email: lead.email });
+      if (!existing) {
+        const newLead = new Lead({
+          name: lead.email.split('@')[0],
+          email: lead.email,
+          phone: lead.phone || '',
+          website: lead.source,
+          address: lead.source,
+          placeId: `email_${lead.email}_${Date.now()}`,
+          rating: lead.verified ? 3 : 0,
+          source: 'email_extracted',
+          createdAt: new Date()
+        });
+        await newLead.save();
+        saved.push(newLead);
+      }
+    }
+    res.json({ success: true, saved: saved.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// ============================================
+// ✅ BULK SEND EMAIL (Nodemailer)
+// ============================================
+export const bulkSendEmail = async (req, res) => {
+  try {
+    const { recipients, subject, message } = req.body;
+    
+    if (!recipients || recipients.length === 0) {
+      return res.status(400).json({ error: 'No recipients' });
+    }
+
+    const results = [];
+    let sent = 0;
+    let failed = 0;
+
+    for (const email of recipients) {
+      try {
+        const info = await transporter.sendMail({
+          from: `"LeadConnect Pro" <${process.env.SMTP_USER}>`,
+          to: email,
+          subject: subject || 'Hello from LeadConnect Pro',
+          html: message || 'Hi,<br><br>I hope this email finds you well.<br><br>Best regards,<br>Team LeadConnect'
+        });
+        sent++;
+        results.push({ email, status: 'sent', messageId: info.messageId });
+      } catch (error) {
+        failed++;
+        results.push({ email, status: 'failed', error: error.message });
+      }
+    }
+
+    res.json({ success: true, sent, failed, total: recipients.length, results });
+  } catch (error) {
+    console.error('Email send error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// ============================================
+// ✅ EXTRACT EMAILS FROM LEAD IDs
+// ============================================
+export const extractEmailsFromLeadIds = async (req, res) => {
+  try {
+    const { leadIds, deep = false, maxPagesPerUrl = 5 } = req.body;
+    if (!leadIds || !leadIds.length) {
+      return res.status(400).json({ error: 'No lead IDs provided' });
+    }
+
+    const leads = await Lead.find({ _id: { $in: leadIds }, website: { $ne: '', $exists: true } });
+    const results = [];
+    let totalNewEmails = 0;
+
+    for (const lead of leads) {
+      const extracted = await extractEmailsFromUrl(lead.website, deep, maxPagesPerUrl);
+      for (const item of extracted) {
+        const existing = await Lead.findOne({ email: item.email });
+        if (!existing) {
+          const newLead = new Lead({
+            name: `Email from ${lead.website}`,
+            email: item.email,
+            phone: item.phone || '',
+            website: lead.website,
+            address: lead.address,
+            rating: item.verified ? 3 : 1,
+            placeId: `email_${Date.now()}_${Math.random()}`,
+            source: 'email_extracted',
+            parentLeadId: lead._id,
+            createdAt: new Date()
+          });
+          await newLead.save();
+          totalNewEmails++;
+          results.push({ leadId: lead._id, website: lead.website, email: item.email, verified: item.verified });
+        }
+      }
+    }
+    res.json({ success: true, totalNewEmails, results });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
   }
 };
