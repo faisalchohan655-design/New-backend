@@ -4,34 +4,44 @@ import Lead from '../models/Lead.js';
 
 const router = express.Router();
 
-// ✅ GET all leads
+// GET all leads
 router.get('/', async (req, res) => {
   try {
     const leads = await Lead.find().sort({ createdAt: -1 });
     res.json(leads);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ✅ SAVE leads - YEH ROUTE HONA CHAHIYE
+// ✅ BULK SAVE - FIXED (200 OK returns data)
 router.post('/bulk', async (req, res) => {
   try {
     const { leads } = req.body;
     
-    if (!leads || !leads.length) {
+    console.log('📝 Bulk save:', leads?.length || 0, 'leads');
+
+    if (!leads || !Array.isArray(leads) || leads.length === 0) {
       return res.status(400).json({ error: 'No leads provided' });
     }
 
     const saved = [];
-    
+    const skipped = [];
+
     for (const lead of leads) {
-      // Duplicate check
-      const exists = await Lead.findOne({ 
-        $or: [{ email: lead.email }, { phone: lead.phone }] 
-      });
-      
-      if (!exists) {
+      try {
+        const existing = await Lead.findOne({
+          $or: [
+            { email: lead.email },
+            { phone: lead.phone }
+          ]
+        });
+
+        if (existing) {
+          skipped.push({ email: lead.email, reason: 'Duplicate' });
+          continue;
+        }
+
         const newLead = new Lead({
           name: lead.name || 'Unknown',
           email: lead.email || '',
@@ -45,15 +55,28 @@ router.post('/bulk', async (req, res) => {
           verified: lead.verified || false,
           status: lead.status || 'new'
         });
+
         await newLead.save();
         saved.push(newLead);
+      } catch (err) {
+        skipped.push({ email: lead.email, reason: err.message });
       }
     }
 
-    res.json({ success: true, saved: saved.length, savedLeads: saved });
-  } catch (err) {
-    console.error('Bulk save error:', err);
-    res.status(500).json({ error: err.message });
+    console.log(`✅ Saved: ${saved.length}, Skipped: ${skipped.length}`);
+
+    // ✅ YEH IMPORTANT HAI - 200 OK with data
+    res.status(200).json({
+      success: true,
+      saved: saved.length,
+      skipped: skipped.length,
+      savedLeads: saved,
+      skippedDetails: skipped
+    });
+
+  } catch (error) {
+    console.error('❌ Bulk save error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
