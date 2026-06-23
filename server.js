@@ -1,9 +1,12 @@
+// backend/server.js
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import scrapeRoutes from './routes/scrape.js';
-import leadRoutes from './routes/leads.js';
+
+// ✅ FIXED: Correct file names
+import scrapeRoutes from './routes/scrape.js';      // was 'scale.js'
+import leadRoutes from './routes/leads.js';          // was 'lead.js'
 import emailRoutes from './routes/email.js';
 import socialRoutes from './routes/social.js';
 import replyRoutes from './routes/replies.js';
@@ -33,7 +36,7 @@ app.get('/', (req, res) => {
   res.json({ message: 'LeadConnect API is running', status: 'ok' });
 });
 
-mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 5000 })
+mongoose.connect(process.env.MONGODB_URL, { serverSelectionTimeoutMS: 5000 })
   .then(() => console.log('✅ MongoDB connected!'))
   .catch(err => {
     console.error('❌ MongoDB error:', err.message);
