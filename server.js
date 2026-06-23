@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 
 import scrapeRoutes from './routes/scrape.js';
 import leadRoutes from './routes/leads.js';
-import emailRoutes from './routes/email.js';
+import emailRoutes from './routes/email.js';      // ✅ FIXED: email.js (not emails.js)
 import socialRoutes from './routes/social.js';
 import replyRoutes from './routes/replies.js';
 import userRoutes from './routes/user.js';
@@ -26,7 +26,7 @@ app.use(express.json());
 // Routes
 app.use('/api', scrapeRoutes);
 app.use('/api/leads', leadRoutes);
-app.use('/api/email', emailRoutes);
+app.use('/api/email', emailRoutes);        // ✅ FIXED: /api/email (not /api/emails)
 app.use('/api/social', socialRoutes);
 app.use('/api/replies', replyRoutes);
 app.use('/api/user', userRoutes);
@@ -36,7 +36,7 @@ app.get('/', (req, res) => {
 });
 
 // ============================================
-// ✅ FIXED: Check BOTH MONGODB_URI and MONGODB_URL
+// ✅ FIXED: MongoDB Connection
 // ============================================
 const MONGODB_URL = process.env.MONGODB_URI || process.env.MONGODB_URL;
 
