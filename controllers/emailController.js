@@ -1,12 +1,12 @@
 // backend/controllers/emailController.js
+import nodemailer from 'nodemailer';  // ✅ CORRECT IMPORT
 import { extractEmailsFromUrl } from '../utils/emailExtractor.js';
 import Lead from '../models/Lead.js';
-import nodemailer from 'nodemailer';
 
 // ============================================
 // ✅ EMAIL TRANSPORTER
 // ============================================
-const transporter = nodemailer.createTransporter({
+const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT) || 587,
   secure: false,
@@ -21,7 +21,7 @@ const transporter = nodemailer.createTransporter({
 // ============================================
 export const extractEmails = async (req, res) => {
   try {
-    const { url, deep = false, maxPages = 10, extractSocial = true } = req.body;
+    const { url, deep = false, maxPages = 10 } = req.body;
     if (!url) return res.status(400).json({ error: 'URL required' });
     const leads = await extractEmailsFromUrl(url, deep, maxPages);
     res.json({ success: true, count: leads.length, leads });
@@ -91,6 +91,11 @@ export const bulkSendEmail = async (req, res) => {
     
     if (!recipients || recipients.length === 0) {
       return res.status(400).json({ error: 'No recipients' });
+    }
+
+    // Check SMTP config
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      return res.status(500).json({ error: 'SMTP not configured' });
     }
 
     const results = [];
