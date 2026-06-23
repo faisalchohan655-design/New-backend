@@ -1,23 +1,30 @@
 // backend/controllers/emailController.js
-import nodemailer from 'nodemailer';  // ✅ CORRECT IMPORT
+import nodemailer from 'nodemailer';  // ✅ YE SAHI HAI
 import { extractEmailsFromUrl } from '../utils/emailExtractor.js';
 import Lead from '../models/Lead.js';
 
 // ============================================
-// ✅ EMAIL TRANSPORTER
+// ✅ EMAIL TRANSPORTER - FIXED
 // ============================================
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT) || 587,
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
-  }
-});
+let transporter;
+
+try {
+  transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT) || 587,
+    secure: false,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
+    }
+  });
+  console.log('✅ Nodemailer transporter created');
+} catch (error) {
+  console.error('❌ Nodemailer error:', error.message);
+}
 
 // ============================================
-// ✅ EXTRACT EMAILS FROM URL
+// ✅ EXTRACT EMAILS
 // ============================================
 export const extractEmails = async (req, res) => {
   try {
@@ -93,9 +100,8 @@ export const bulkSendEmail = async (req, res) => {
       return res.status(400).json({ error: 'No recipients' });
     }
 
-    // Check SMTP config
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      return res.status(500).json({ error: 'SMTP not configured' });
+    if (!transporter) {
+      return res.status(500).json({ error: 'Email service not configured' });
     }
 
     const results = [];
