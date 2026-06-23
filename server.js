@@ -4,9 +4,8 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
-// ✅ FIXED: Correct file names
-import scrapeRoutes from './routes/scrape.js';      // was 'scale.js'
-import leadRoutes from './routes/leads.js';          // was 'lead.js'
+import scrapeRoutes from './routes/scrape.js';
+import leadRoutes from './routes/leads.js';
 import emailRoutes from './routes/email.js';
 import socialRoutes from './routes/social.js';
 import replyRoutes from './routes/replies.js';
@@ -36,12 +35,27 @@ app.get('/', (req, res) => {
   res.json({ message: 'LeadConnect API is running', status: 'ok' });
 });
 
-mongoose.connect(process.env.MONGODB_URL, { serverSelectionTimeoutMS: 5000 })
-  .then(() => console.log('✅ MongoDB connected!'))
-  .catch(err => {
-    console.error('❌ MongoDB error:', err.message);
-    process.exit(1);
-  });
+// ============================================
+// ✅ FIXED: MongoDB Connection with Check
+// ============================================
+const MONGODB_URL = process.env.MONGODB_URL;
+
+if (!MONGODB_URL) {
+  console.error('❌ MONGODB_URL is not defined in environment variables!');
+  console.error('Please set MONGODB_URL in .env file or Railway environment variables.');
+  process.exit(1);
+}
+
+console.log('📡 Connecting to MongoDB...');
+
+mongoose.connect(MONGODB_URL, {
+  serverSelectionTimeoutMS: 5000
+})
+.then(() => console.log('✅ MongoDB connected!'))
+.catch(err => {
+  console.error('❌ MongoDB error:', err.message);
+  process.exit(1);
+});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 LeadConnect backend on port ${PORT}`);
