@@ -36,13 +36,13 @@ app.get('/', (req, res) => {
 });
 
 // ============================================
-// ✅ FIXED: MongoDB Connection with Check
+// ✅ FIXED: Check BOTH MONGODB_URI and MONGODB_URL
 // ============================================
-const MONGODB_URL = process.env.MONGODB_URL;
+const MONGODB_URL = process.env.MONGODB_URI || process.env.MONGODB_URL;
 
 if (!MONGODB_URL) {
-  console.error('❌ MONGODB_URL is not defined in environment variables!');
-  console.error('Please set MONGODB_URL in .env file or Railway environment variables.');
+  console.error('❌ MONGODB_URI is not defined in environment variables!');
+  console.error('Please set MONGODB_URI in Railway environment variables.');
   process.exit(1);
 }
 
